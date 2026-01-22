@@ -97,6 +97,7 @@ export default function KPIPhongPage() {
   const [selectedDetail, setSelectedDetail] = useState('');
   const [loading, setLoading] = useState(true);
   const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [editingTaskData, setEditingTaskData] = useState<Partial<Task>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [kpiData, setKpiData] = useState<any>(null);
@@ -325,21 +326,35 @@ export default function KPIPhongPage() {
     }
   };
 
-  const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
+  const handleUpdateTask = async (taskId: string) => {
     try {
       const res = await fetch('/api/tasks', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: taskId, ...updates })
+        body: JSON.stringify({ id: taskId, ...editingTaskData })
       });
       
       if (res.ok) {
         setEditingTask(null);
+        setEditingTaskData({});
         fetchTasks();
       }
     } catch (err) {
       console.error('Error updating task:', err);
     }
+  };
+
+  const startEditing = (task: Task) => {
+    setEditingTask(task.id);
+    setEditingTaskData({
+      status: task.status,
+      progress: task.progress
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingTask(null);
+    setEditingTaskData({});
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -359,6 +374,12 @@ export default function KPIPhongPage() {
     if (tasks.length === 0) return 0;
     const total = tasks.reduce((sum, t) => sum + t.progress, 0);
     return Math.round(total / tasks.length);
+  };
+
+  // Get KPI name from kpiOptions by code
+  const getKpiName = (kpiCode: string): string => {
+    const kpi = kpiOptions.find(k => k.code === kpiCode);
+    return kpi?.name || '';
   };
 
   // Calculate KPI progress based on linked tasks
@@ -681,7 +702,7 @@ export default function KPIPhongPage() {
                   <th className="table__cell">Người thực hiện</th>
                   <th className="table__cell">Trạng thái</th>
                   <th className="table__cell">Tiến độ</th>
-                  <th className="table__cell">Hạn</th>
+                  <th className="table__cell">Ngày đến hạn</th>
                   <th className="table__cell">Thao tác</th>
                 </tr>
               </thead>
@@ -704,16 +725,23 @@ export default function KPIPhongPage() {
                         )}
                       </td>
                       <td className="table__cell">
-                        <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px' }}>
-                          {task.kpiCode}
-                        </span>
+                        <div>
+                          <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                            {task.kpiCode}
+                          </span>
+                          {getKpiName(task.kpiCode) && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                              {getKpiName(task.kpiCode)}
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="table__cell">{task.assignee || '-'}</td>
                       <td className="table__cell">
                         {editingTask === task.id ? (
                           <select
-                            value={task.status}
-                            onChange={(e) => handleUpdateTask(task.id, { status: e.target.value as Task['status'] })}
+                            value={editingTaskData.status || task.status}
+                            onChange={(e) => setEditingTaskData({ ...editingTaskData, status: e.target.value as Task['status'] })}
                             style={{ padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
                           >
                             <option value="pending">Chờ xử lý</option>
@@ -738,8 +766,8 @@ export default function KPIPhongPage() {
                             type="number"
                             min="0"
                             max="100"
-                            value={task.progress}
-                            onChange={(e) => handleUpdateTask(task.id, { progress: parseInt(e.target.value) || 0 })}
+                            value={editingTaskData.progress ?? task.progress}
+                            onChange={(e) => setEditingTaskData({ ...editingTaskData, progress: parseInt(e.target.value) || 0 })}
                             style={{ width: '60px', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
                           />
                         ) : (
@@ -749,20 +777,53 @@ export default function KPIPhongPage() {
                       <td className="table__cell">{task.dueDate || '-'}</td>
                       <td className="table__cell">
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button
-                            onClick={() => setEditingTask(editingTask === task.id ? null : task.id)}
-                            style={{
-                              padding: '4px 8px',
-                              backgroundColor: editingTask === task.id ? 'var(--color-success)' : 'var(--color-primary)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.75rem'
-                            }}
-                          >
-                            {editingTask === task.id ? '✓' : '✏️'}
-                          </button>
+                          {editingTask === task.id ? (
+                            <>
+                              <button
+                                onClick={() => handleUpdateTask(task.id)}
+                                style={{
+                                  padding: '4px 8px',
+                                  backgroundColor: 'var(--color-success)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={cancelEditing}
+                                style={{
+                                  padding: '4px 8px',
+                                  backgroundColor: 'var(--color-text-secondary)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => startEditing(task)}
+                              style={{
+                                padding: '4px 8px',
+                                backgroundColor: 'var(--color-primary)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.75rem'
+                              }}
+                            >
+                              ✏️
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDeleteTask(task.id)}
                             style={{
