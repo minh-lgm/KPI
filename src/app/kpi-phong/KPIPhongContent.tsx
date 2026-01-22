@@ -30,12 +30,6 @@ const DEPARTMENTS = [
   { code: 'P.PDTD', name: 'Phòng Phê duyệt Tín dụng' },
 ];
 
-const statusColors: Record<string, string> = {
-  pending: '#f59e0b',
-  in_progress: '#3b82f6',
-  completed: '#10b981'
-};
-
 export default function KPIPhongContent() {
   const [departmentStats, setDepartmentStats] = useState<DepartmentStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +76,7 @@ export default function KPIPhongContent() {
   };
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center' }}>Đang tải...</div>;
+    return <div className="loading">Đang tải...</div>;
   }
 
   return (
@@ -92,57 +86,45 @@ export default function KPIPhongContent() {
         <p className="page-header__subtitle">Chọn phòng ban để xem và cập nhật tiến độ tasks</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+      <div className="dept-grid">
         {departmentStats.map((dept) => (
           <a 
             key={dept.code} 
             href={`/kpi-phong/${encodeURIComponent(dept.code)}`}
-            style={{ textDecoration: 'none', color: 'inherit' }}
+            className="dept-card"
           >
-            <div className="card" style={{ cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}>
+            <div className="card">
               <div className="card__header">
-                <h3 className="card__title" style={{ fontSize: '1rem' }}>{dept.code}</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', margin: 0 }}>
-                  {dept.name}
-                </p>
+                <h3 className="card__title dept-card__title">{dept.code}</h3>
+                <p className="dept-card__subtitle">{dept.name}</p>
               </div>
               <div className="card__body">
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
-                    Tiến độ trung bình
-                  </div>
+                <div className="dept-card__progress">
+                  <div className="dept-card__progress-label">Tiến độ trung bình</div>
                   <ProgressBar value={dept.averageProgress} showLabel />
                 </div>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
-                  <div style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '4px' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>{dept.totalTasks}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Tổng tasks</div>
+                <div className="dept-card__stats">
+                  <div className="dept-card__stat">
+                    <div className="dept-card__stat-value">{dept.totalTasks}</div>
+                    <div className="dept-card__stat-label">Tổng tasks</div>
                   </div>
-                  <div style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '4px' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: statusColors.completed }}>{dept.completedTasks}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Hoàn thành</div>
+                  <div className="dept-card__stat">
+                    <div className="dept-card__stat-value dept-card__stat-value--completed">{dept.completedTasks}</div>
+                    <div className="dept-card__stat-label">Hoàn thành</div>
                   </div>
-                  <div style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '4px' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: statusColors.in_progress }}>{dept.inProgressTasks}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Đang làm</div>
+                  <div className="dept-card__stat">
+                    <div className="dept-card__stat-value dept-card__stat-value--in-progress">{dept.inProgressTasks}</div>
+                    <div className="dept-card__stat-label">Đang làm</div>
                   </div>
-                  <div style={{ textAlign: 'center', padding: '0.5rem', backgroundColor: 'var(--color-bg-secondary)', borderRadius: '4px' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 700, color: statusColors.pending }}>{dept.pendingTasks}</div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Chờ xử lý</div>
+                  <div className="dept-card__stat">
+                    <div className="dept-card__stat-value dept-card__stat-value--pending">{dept.pendingTasks}</div>
+                    <div className="dept-card__stat-label">Chờ xử lý</div>
                   </div>
                 </div>
 
-                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                  <span style={{ 
-                    padding: '0.5rem 1rem', 
-                    backgroundColor: 'var(--color-primary)', 
-                    color: 'white', 
-                    borderRadius: '4px',
-                    fontSize: '0.875rem'
-                  }}>
-                    Xem Tasks →
-                  </span>
+                <div className="dept-card__action">
+                  <span className="dept-card__action-btn">Xem Tasks →</span>
                 </div>
               </div>
             </div>

@@ -170,11 +170,11 @@ export default function KPIKhoiContent() {
           <div className="table-container">
             <table className="table" style={{ tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
-                <col style={{ width: '40px' }} />
+                <col style={{ width: '50px' }} />
                 <col style={{ width: '60px' }} />
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: '80px' }} />
-                <col style={{ width: '150px' }} />
+                <col style={{ width: '180px' }} />
                 <col style={{ width: '100px' }} />
                 <col style={{ width: '100px' }} />
                 <col style={{ width: '120px' }} />
@@ -200,7 +200,7 @@ export default function KPIKhoiContent() {
                       style={{ cursor: 'pointer', backgroundColor: 'var(--color-primary)', color: 'white' }}
                       onClick={() => toggleGroup(group.code)}
                     >
-                      <td className="table__cell">
+                      <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
                         {expandedGroups.has(group.code) ? '▼' : '▶'}
                       </td>
                       <td className="table__cell">{group.code}</td>
@@ -223,7 +223,7 @@ export default function KPIKhoiContent() {
                       <React.Fragment key={subGroup.code}>
                         {isDirectKPI ? (
                           <tr className="table__row table__row--level2" style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)' }}>
-                            <td className="table__cell" style={{ paddingLeft: '1.5rem' }}></td>
+                            <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
                             <td className="table__cell">{subGroup.code.split('.').pop()}</td>
                             <td className="table__cell"><strong>{subGroup.name}</strong></td>
                             <td className="table__cell">{subGroup.weight}%</td>
@@ -249,7 +249,7 @@ export default function KPIKhoiContent() {
                               style={{ cursor: hasChildren ? 'pointer' : 'default', backgroundColor: 'rgba(37, 99, 235, 0.1)' }}
                               onClick={() => hasChildren && toggleGroup(subGroup.code)}
                             >
-                              <td className="table__cell" style={{ paddingLeft: '1.5rem' }}>
+                              <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
                                 {hasChildren ? (expandedGroups.has(subGroup.code) ? '▼' : '▶') : ''}
                               </td>
                               <td className="table__cell">{subGroup.code.split('.').pop()}</td>
@@ -275,7 +275,7 @@ export default function KPIKhoiContent() {
                                   }}
                                   onClick={() => item.subItems.length > 0 && toggleGroup(item.id)}
                                 >
-                                  <td className="table__cell" style={{ paddingLeft: '2rem' }}>
+                                  <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
                                     {item.subItems.length > 0 ? (expandedGroups.has(item.id) ? '▼' : '▶') : ''}
                                   </td>
                                   <td className="table__cell">{item.code}</td>
@@ -314,8 +314,8 @@ export default function KPIKhoiContent() {
                                 {/* Level 4: SubItems */}
                                 {item.subItems.length > 0 && expandedGroups.has(item.id) && item.subItems.map((subItem) => (
                                   <tr key={subItem.id} className="table__row">
-                                    <td className="table__cell"></td>
-                                    <td className="table__cell" style={{ paddingLeft: '1rem' }}>{subItem.code}</td>
+                                    <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
+                                    <td className="table__cell">{subItem.code}</td>
                                     <td className="table__cell">
                                       <div>{subItem.name}</div>
                                       {subItem.description && (

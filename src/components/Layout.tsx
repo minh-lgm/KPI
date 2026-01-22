@@ -1,19 +1,21 @@
+'use client';
+
 import Sidebar from './Sidebar';
-import { getSession } from '@/lib/auth';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-export default async function Layout({ children }: LayoutProps) {
-  const user = await getSession();
-
+export default function Layout({ children }: LayoutProps) {
   return (
-    <div className="layout">
-      <Sidebar user={user} />
-      <main className="layout__main">
-        {children}
-      </main>
-    </div>
+    <AuthProvider>
+      <div className="layout">
+        <Sidebar />
+        <main className="layout__main">
+          {children}
+        </main>
+      </div>
+    </AuthProvider>
   );
 }

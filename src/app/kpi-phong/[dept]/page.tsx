@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import ProgressBar from '@/components/ProgressBar';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Task {
   id: string;
@@ -82,6 +83,7 @@ const statusLabels: Record<string, string> = {
 export default function KPIPhongPage() {
   const params = useParams();
   const dept = decodeURIComponent(params.dept as string);
+  const { isAuthenticated } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'tasks' | 'kpi'>('tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -347,6 +349,8 @@ export default function KPIPhongPage() {
   const startEditing = (task: Task) => {
     setEditingTask(task.id);
     setEditingTaskData({
+      title: task.title,
+      assignee: task.assignee,
       status: task.status,
       progress: task.progress
     });
@@ -376,18 +380,88 @@ export default function KPIPhongPage() {
     return Math.round(total / tasks.length);
   };
 
-  // Get KPI name from kpiOptions by code
+  // Format date from yyyy-mm-dd to dd/mm/yyyy
+  const formatDate = (dateStr: string | undefined | null): string => {
+    if (!dateStr) return '-';
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  // Get KPI name from kpiOptions by code (search by exact match or partial match)
   const getKpiName = (kpiCode: string): string => {
-    const kpi = kpiOptions.find(k => k.code === kpiCode);
+    // Try exact match first
+    let kpi = kpiOptions.find(k => k.code === kpiCode);
+    if (kpi) return kpi.name;
+    
+    // Try matching by ending with the code
+    kpi = kpiOptions.find(k => k.code.endsWith(`.${kpiCode}`) || k.code.endsWith(kpiCode));
+    if (kpi) return kpi.name;
+    
+    // Try matching by id
+    kpi = kpiOptions.find(k => k.id === kpiCode);
     return kpi?.name || '';
   };
 
-  // Calculate KPI progress based on linked tasks
+  // Calculate KPI progress based on linked tasks (for leaf level)
   const getKpiProgress = (kpiId: string, originalProgress: number) => {
     const linkedTasks = tasks.filter(t => t.kpiItemId === kpiId);
     if (linkedTasks.length === 0) return originalProgress;
     const total = linkedTasks.reduce((sum, t) => sum + t.progress, 0);
     return Math.round(total / linkedTasks.length);
+  };
+
+  // Calculate Detail progress (from tasks)
+  const getDetailProgress = (detail: any) => {
+    return getKpiProgress(detail.id, detail.departments[0]?.progress || 0);
+  };
+
+  // Calculate SubItem progress (from details with weight, or direct tasks)
+  const getSubItemProgress = (subItem: any) => {
+    const details = subItem.details || [];
+    if (details.length > 0) {
+      let totalWeight = 0;
+      let weightedSum = 0;
+      details.forEach((d: any) => {
+        const weight = d.weight || 1;
+        totalWeight += weight;
+        weightedSum += getDetailProgress(d) * weight;
+      });
+      return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+    }
+    return getKpiProgress(subItem.id, subItem.departments[0]?.progress || 0);
+  };
+
+  // Calculate Item progress (from subItems with weight, or direct tasks)
+  const getItemProgress = (item: any) => {
+    const subItems = item.subItems || [];
+    if (subItems.length > 0) {
+      let totalWeight = 0;
+      let weightedSum = 0;
+      subItems.forEach((si: any) => {
+        const weight = si.weight || 1;
+        totalWeight += weight;
+        weightedSum += getSubItemProgress(si) * weight;
+      });
+      return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+    }
+    return getKpiProgress(item.id, item.departments[0]?.progress || 0);
+  };
+
+  // Calculate SubGroup progress (from items with weight)
+  const getSubGroupProgress = (subGroup: any) => {
+    const items = subGroup.items || [];
+    if (items.length > 0) {
+      let totalWeight = 0;
+      let weightedSum = 0;
+      items.forEach((i: any) => {
+        const weight = i.weight || 1;
+        totalWeight += weight;
+        weightedSum += getItemProgress(i) * weight;
+      });
+      return totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+    }
+    return 0;
   };
 
   const toggleGroup = (code: string) => {
@@ -398,6 +472,44 @@ export default function KPIPhongPage() {
       newExpanded.add(code);
     }
     setExpandedGroups(newExpanded);
+  };
+
+  // Auto-expand KPI items that have tasks when switching to KPI tab
+  const expandItemsWithTasks = () => {
+    if (!kpiData) return;
+    const toExpand = new Set<string>();
+    const taskKpiIds = new Set(tasks.map(t => t.kpiItemId));
+    
+    kpiData.groups?.forEach((group: any) => {
+      group.subGroups?.forEach((subGroup: any) => {
+        subGroup.items?.forEach((item: any) => {
+          // Check if item has tasks
+          if (taskKpiIds.has(item.id)) {
+            toExpand.add(group.code);
+            toExpand.add(subGroup.code);
+          }
+          // Check subItems
+          item.subItems?.forEach((subItem: any) => {
+            if (taskKpiIds.has(subItem.id)) {
+              toExpand.add(group.code);
+              toExpand.add(subGroup.code);
+              toExpand.add(item.id);
+            }
+            // Check details
+            subItem.details?.forEach((detail: any) => {
+              if (taskKpiIds.has(detail.id)) {
+                toExpand.add(group.code);
+                toExpand.add(subGroup.code);
+                toExpand.add(item.id);
+                toExpand.add(subItem.id);
+              }
+            });
+          });
+        });
+      });
+    });
+    
+    setExpandedGroups(toExpand);
   };
 
   if (loading) {
@@ -440,7 +552,10 @@ export default function KPIPhongPage() {
           📋 Tasks ({tasks.length})
         </button>
         <button
-          onClick={() => setActiveTab('kpi')}
+          onClick={() => {
+            setActiveTab('kpi');
+            expandItemsWithTasks();
+          }}
           style={{
             padding: '0.5rem 1rem',
             border: 'none',
@@ -457,22 +572,24 @@ export default function KPIPhongPage() {
       {/* Tab Content: Tasks */}
       {activeTab === 'tasks' && (
         <>
-          {/* Add Task Button */}
-          <div style={{ marginBottom: '1rem' }}>
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: 'var(--color-primary)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              {showAddForm ? 'Hủy' : '+ Thêm Task mới'}
-            </button>
-          </div>
+          {/* Add Task Button - only show when authenticated */}
+          {isAuthenticated && (
+            <div style={{ marginBottom: '1rem' }}>
+              <button
+                onClick={() => setShowAddForm(!showAddForm)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                {showAddForm ? 'Hủy' : '+ Thêm Task mới'}
+              </button>
+            </div>
+          )}
 
           {/* Add Task Form */}
           {showAddForm && (
@@ -697,51 +814,108 @@ export default function KPIPhongPage() {
             <table className="table">
               <thead>
                 <tr className="table__header">
-                  <th className="table__cell">Tiêu đề</th>
-                  <th className="table__cell">KPI</th>
-                  <th className="table__cell">Người thực hiện</th>
-                  <th className="table__cell">Trạng thái</th>
-                  <th className="table__cell">Tiến độ</th>
-                  <th className="table__cell">Ngày đến hạn</th>
-                  <th className="table__cell">Thao tác</th>
+                  <th className="table__cell table__cell--kpi-code">Mã KPI</th>
+                  <th className="table__cell table__cell--kpi-name">Nội dung KPI</th>
+                  <th className="table__cell table__cell--title">Tiêu đề</th>
+                  <th className="table__cell table__cell--assignee">Người thực hiện</th>
+                  <th className="table__cell table__cell--status">Trạng thái</th>
+                  <th className="table__cell table__cell--progress">Tiến độ</th>
+                  <th className="table__cell table__cell--due-date">Ngày đến hạn</th>
+                  <th className="table__cell table__cell--actions">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {tasks.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-secondary)' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-secondary)' }}>
                       Chưa có task nào. Hãy tạo task mới!
                     </td>
                   </tr>
                 ) : (
-                  tasks.map((task) => (
-                    <tr key={task.id} className="table__row">
-                      <td className="table__cell">
-                        <div style={{ fontWeight: 500 }}>{task.title}</div>
-                        {task.description && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                            {task.description.substring(0, 50)}{task.description.length > 50 ? '...' : ''}
-                          </div>
-                        )}
-                      </td>
-                      <td className="table__cell">
-                        <div>
-                          <span style={{ fontSize: '0.75rem', backgroundColor: 'var(--color-bg-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                            {task.kpiCode}
-                          </span>
-                          {getKpiName(task.kpiCode) && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                              {getKpiName(task.kpiCode)}
-                            </div>
+                  (() => {
+                    // Sort tasks by KPI code then due date
+                    const sortedTasks = [...tasks].sort((a, b) => {
+                      const kpiCompare = a.kpiCode.localeCompare(b.kpiCode, undefined, { numeric: true });
+                      if (kpiCompare !== 0) return kpiCompare;
+                      if (!a.dueDate && !b.dueDate) return 0;
+                      if (!a.dueDate) return 1;
+                      if (!b.dueDate) return -1;
+                      return a.dueDate.localeCompare(b.dueDate);
+                    });
+                    
+                    // Calculate rowSpan for each KPI code
+                    const kpiCounts: Record<string, number> = {};
+                    sortedTasks.forEach(t => {
+                      kpiCounts[t.kpiCode] = (kpiCounts[t.kpiCode] || 0) + 1;
+                    });
+                    
+                    // Track which KPI codes have been rendered
+                    const renderedKpis = new Set<string>();
+                    
+                    return sortedTasks.map((task) => {
+                      const isFirstOfKpi = !renderedKpis.has(task.kpiCode);
+                      if (isFirstOfKpi) renderedKpis.add(task.kpiCode);
+                      const rowSpan = kpiCounts[task.kpiCode];
+                      
+                      return (
+                        <tr key={task.id} className="table__row">
+                          {isFirstOfKpi && (
+                            <>
+                              <td className="table__cell table__cell--kpi-code" rowSpan={rowSpan} style={{ verticalAlign: 'middle' }}>
+                                <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>
+                                  {task.kpiCode}
+                                </span>
+                              </td>
+                              <td className="table__cell table__cell--kpi-name" rowSpan={rowSpan} style={{ verticalAlign: 'middle' }}>
+                                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+                                  {getKpiName(task.kpiCode) || '-'}
+                                </span>
+                              </td>
+                            </>
                           )}
-                        </div>
-                      </td>
-                      <td className="table__cell">{task.assignee || '-'}</td>
+                          <td className="table__cell">
+                            {editingTask === task.id ? (
+                              <input
+                                type="text"
+                                value={editingTaskData.title ?? task.title}
+                                onChange={(e) => setEditingTaskData({ ...editingTaskData, title: e.target.value })}
+                                style={{ width: '100%', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', fontWeight: 500 }}
+                              />
+                            ) : (
+                              <>
+                                <div style={{ fontWeight: 500 }}>{task.title}</div>
+                                {task.description && (
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                                    {task.description.substring(0, 50)}{task.description.length > 50 ? '...' : ''}
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </td>
+                          <td className="table__cell">
+                            {editingTask === task.id ? (
+                              <input
+                                type="text"
+                                value={editingTaskData.assignee ?? task.assignee ?? ''}
+                                onChange={(e) => setEditingTaskData({ ...editingTaskData, assignee: e.target.value })}
+                                style={{ width: '100%', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
+                              />
+                            ) : (
+                              task.assignee || '-'
+                            )}
+                          </td>
                       <td className="table__cell">
                         {editingTask === task.id ? (
                           <select
                             value={editingTaskData.status || task.status}
-                            onChange={(e) => setEditingTaskData({ ...editingTaskData, status: e.target.value as Task['status'] })}
+                            onChange={(e) => {
+                              const newStatus = e.target.value as Task['status'];
+                              setEditingTaskData({ 
+                                ...editingTaskData, 
+                                status: newStatus,
+                                progress: newStatus === 'completed' ? 100 : (newStatus === 'pending' ? 0 : editingTaskData.progress)
+                              });
+                            }}
                             style={{ padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
                           >
                             <option value="pending">Chờ xử lý</option>
@@ -774,16 +948,47 @@ export default function KPIPhongPage() {
                           <ProgressBar value={task.progress} showLabel />
                         )}
                       </td>
-                      <td className="table__cell">{task.dueDate || '-'}</td>
+                      <td className="table__cell">{formatDate(task.dueDate)}</td>
                       <td className="table__cell">
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          {editingTask === task.id ? (
-                            <>
+                        {isAuthenticated && (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            {editingTask === task.id ? (
+                              <>
+                                <button
+                                  onClick={() => handleUpdateTask(task.id)}
+                                  style={{
+                                    padding: '4px 8px',
+                                    backgroundColor: 'var(--color-success)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem'
+                                  }}
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  onClick={cancelEditing}
+                                  style={{
+                                    padding: '4px 8px',
+                                    backgroundColor: 'var(--color-text-secondary)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem'
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            ) : (
                               <button
-                                onClick={() => handleUpdateTask(task.id)}
+                                onClick={() => startEditing(task)}
                                 style={{
                                   padding: '4px 8px',
-                                  backgroundColor: 'var(--color-success)',
+                                  backgroundColor: 'var(--color-primary)',
                                   color: 'white',
                                   border: 'none',
                                   borderRadius: '4px',
@@ -791,29 +996,14 @@ export default function KPIPhongPage() {
                                   fontSize: '0.75rem'
                                 }}
                               >
-                                ✓
+                                ✏️
                               </button>
-                              <button
-                                onClick={cancelEditing}
-                                style={{
-                                  padding: '4px 8px',
-                                  backgroundColor: 'var(--color-text-secondary)',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.75rem'
-                                }}
-                              >
-                                ✕
-                              </button>
-                            </>
-                          ) : (
+                            )}
                             <button
-                              onClick={() => startEditing(task)}
+                              onClick={() => handleDeleteTask(task.id)}
                               style={{
                                 padding: '4px 8px',
-                                backgroundColor: 'var(--color-primary)',
+                                backgroundColor: 'var(--color-danger)',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',
@@ -821,27 +1011,15 @@ export default function KPIPhongPage() {
                                 fontSize: '0.75rem'
                               }}
                             >
-                              ✏️
+                              🗑️
                             </button>
-                          )}
-                          <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            style={{
-                              padding: '4px 8px',
-                              backgroundColor: 'var(--color-danger)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.75rem'
-                            }}
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </div>
+                        )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()
                 )}
               </tbody>
             </table>
@@ -855,7 +1033,7 @@ export default function KPIPhongPage() {
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
-                <col style={{ width: '40px' }} />
+                <col style={{ width: '50px' }} />
                 <col style={{ width: '80px' }} />
                 <col style={{ width: 'auto' }} />
                 <col style={{ width: '120px' }} />
@@ -883,7 +1061,7 @@ export default function KPIPhongPage() {
                       style={{ backgroundColor: 'var(--color-primary)', color: 'white', cursor: 'pointer' }}
                       onClick={() => toggleGroup(group.code)}
                     >
-                      <td className="table__cell">{expandedGroups.has(group.code) ? '▼' : '▶'}</td>
+                      <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>{expandedGroups.has(group.code) ? '▼' : '▶'}</td>
                       <td className="table__cell" style={{ fontWeight: 700 }}>{group.code}</td>
                       <td className="table__cell" colSpan={5} style={{ fontWeight: 700 }}>{group.name}</td>
                     </tr>
@@ -896,11 +1074,17 @@ export default function KPIPhongPage() {
                           style={{ backgroundColor: 'var(--color-bg-secondary)', cursor: 'pointer' }}
                           onClick={() => toggleGroup(subGroup.code)}
                         >
-                          <td className="table__cell" style={{ paddingLeft: '1rem' }}>
+                          <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
                             {expandedGroups.has(subGroup.code) ? '▼' : '▶'}
                           </td>
                           <td className="table__cell" style={{ fontWeight: 600 }}>{subGroup.code}</td>
-                          <td className="table__cell" colSpan={5} style={{ fontWeight: 600 }}>{subGroup.name}</td>
+                          <td className="table__cell" style={{ fontWeight: 600 }}>{subGroup.name}</td>
+                          <td className="table__cell">-</td>
+                          <td className="table__cell">-</td>
+                          <td className="table__cell">
+                            <ProgressBar value={getSubGroupProgress(subGroup)} showLabel />
+                          </td>
+                          <td className="table__cell"></td>
                         </tr>
                         
                         {/* Level 3: Items */}
@@ -911,22 +1095,23 @@ export default function KPIPhongPage() {
                               style={{ cursor: item.subItems?.length > 0 ? 'pointer' : 'default' }}
                               onClick={() => item.subItems?.length > 0 && toggleGroup(item.id)}
                             >
-                              <td className="table__cell" style={{ paddingLeft: '1.5rem' }}>
+                              <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
                                 {item.subItems?.length > 0 ? (expandedGroups.has(item.id) ? '▼' : '▶') : ''}
                               </td>
                               <td className="table__cell">{item.code}</td>
                               <td className="table__cell">{item.name}</td>
-                              <td className="table__cell">{item.departments[0]?.startDate || '-'}</td>
-                              <td className="table__cell">{item.departments[0]?.endDate || '-'}</td>
+                              <td className="table__cell">{formatDate(item.departments[0]?.startDate)}</td>
+                              <td className="table__cell">{formatDate(item.departments[0]?.endDate)}</td>
                               <td className="table__cell">
-                                <ProgressBar value={getKpiProgress(item.id, item.departments[0]?.progress || 0)} showLabel />
+                                <ProgressBar value={getItemProgress(item)} showLabel />
                               </td>
                               <td className="table__cell">
                                 {tasks.filter(t => t.kpiItemId === item.id).length > 0 && (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                     {tasks.filter(t => t.kpiItemId === item.id).map(t => (
-                                      <div key={t.id} style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
-                                        {t.title} ({t.progress}%)
+                                      <div key={t.id} style={{ fontSize: '0.75rem', padding: '4px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
+                                        <div>{t.title} ({t.progress}%)</div>
+                                        {t.dueDate && <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>Ngày đến hạn: {formatDate(t.dueDate)}</div>}
                                       </div>
                                     ))}
                                   </div>
@@ -942,22 +1127,23 @@ export default function KPIPhongPage() {
                                   style={{ backgroundColor: 'rgba(37, 99, 235, 0.03)', cursor: subItem.details?.length > 0 ? 'pointer' : 'default' }}
                                   onClick={() => subItem.details?.length > 0 && toggleGroup(subItem.id)}
                                 >
-                                  <td className="table__cell" style={{ paddingLeft: '2rem' }}>
+                                  <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
                                     {subItem.details?.length > 0 ? (expandedGroups.has(subItem.id) ? '▼' : '▶') : ''}
                                   </td>
                                   <td className="table__cell">{subItem.code}</td>
                                   <td className="table__cell">{subItem.name}</td>
-                                  <td className="table__cell">{subItem.departments[0]?.startDate || '-'}</td>
-                                  <td className="table__cell">{subItem.departments[0]?.endDate || '-'}</td>
+                                  <td className="table__cell">{formatDate(subItem.departments[0]?.startDate)}</td>
+                                  <td className="table__cell">{formatDate(subItem.departments[0]?.endDate)}</td>
                                   <td className="table__cell">
-                                    <ProgressBar value={getKpiProgress(subItem.id, subItem.departments[0]?.progress || 0)} showLabel />
+                                    <ProgressBar value={getSubItemProgress(subItem)} showLabel />
                                   </td>
                                   <td className="table__cell">
                                     {tasks.filter(t => t.kpiItemId === subItem.id).length > 0 && (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                         {tasks.filter(t => t.kpiItemId === subItem.id).map(t => (
-                                          <div key={t.id} style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
-                                            {t.title} ({t.progress}%)
+                                          <div key={t.id} style={{ fontSize: '0.75rem', padding: '4px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
+                                            <div>{t.title} ({t.progress}%)</div>
+                                            {t.dueDate && <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>Ngày đến hạn: {formatDate(t.dueDate)}</div>}
                                           </div>
                                         ))}
                                       </div>
@@ -968,20 +1154,21 @@ export default function KPIPhongPage() {
                                 {/* Level 5: Details */}
                                 {expandedGroups.has(subItem.id) && subItem.details?.map((detail: any) => (
                                   <tr key={detail.id} className="table__row" style={{ backgroundColor: 'rgba(37, 99, 235, 0.02)' }}>
-                                    <td className="table__cell"></td>
-                                    <td className="table__cell" style={{ paddingLeft: '1rem' }}>{detail.code}</td>
+                                    <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
+                                    <td className="table__cell">{detail.code}</td>
                                     <td className="table__cell">{detail.name}</td>
-                                    <td className="table__cell">{detail.departments[0]?.startDate || '-'}</td>
-                                    <td className="table__cell">{detail.departments[0]?.endDate || '-'}</td>
+                                    <td className="table__cell">{formatDate(detail.departments[0]?.startDate)}</td>
+                                    <td className="table__cell">{formatDate(detail.departments[0]?.endDate)}</td>
                                     <td className="table__cell">
-                                      <ProgressBar value={getKpiProgress(detail.id, detail.departments[0]?.progress || 0)} showLabel />
+                                      <ProgressBar value={getDetailProgress(detail)} showLabel />
                                     </td>
                                     <td className="table__cell">
                                       {tasks.filter(t => t.kpiItemId === detail.id).length > 0 && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                           {tasks.filter(t => t.kpiItemId === detail.id).map(t => (
-                                            <div key={t.id} style={{ fontSize: '0.75rem', padding: '2px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
-                                              {t.title} ({t.progress}%)
+                                            <div key={t.id} style={{ fontSize: '0.75rem', padding: '4px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
+                                              <div>{t.title} ({t.progress}%)</div>
+                                              {t.dueDate && <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>Ngày đến hạn: {formatDate(t.dueDate)}</div>}
                                             </div>
                                           ))}
                                         </div>

@@ -10,13 +10,13 @@
 				{
 					"code": "I",
 					"name": "Tăng trưởng dư nợ thời điểm",
-					"weight": 20,
+					"weight": 57,
 					"items": []
 				},
 				{
 					"code": "II",
 					"name": "'Tỷ lệ Nợ Nhóm 2 trên dư nợ thị trường 1 (loại KHCL)",
-					"weight": 15,
+					"weight": 43,
 					"items": []
 				}
 			]
@@ -35,7 +35,7 @@
 				{
 					"code": "I",
 					"name": "Năng suất hồ sơ thẩm định/hồ sơ giám sát CLPD/ giám sát tuân thủ đối với HS lớn",
-					"weight": 10,
+					"weight": 18,
 					"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 					"items": [
 						{
@@ -82,7 +82,7 @@
 				{
 					"code": "II",
 					"name": "Thời gian xử lý/lỗi hồ sơ vi phạm",
-					"weight": 10,
+					"weight": 18,
 					"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 					"items": [
 						{
@@ -126,13 +126,13 @@
 				{
 					"code": "III",
 					"name": "Các mục tiêu trọng tâm của Khối Thẩm định và phê duyệt",
-					"weight": 35,
+					"weight": 64,
 					"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 					"items": [
 						{
 							"code": "1",
 							"name": "Cải tiến quy định và quy trình",
-							"weight": 25,
+							"weight": 29,
 							"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 							"startdate": null,
 							"enddate": null,
@@ -140,7 +140,7 @@
 								{
 									"code": "1.1",
 									"name": "Cải tiến bộ quy định liên quan đến thẩm quyền phán quyết cấp tín dụng",
-									"weight": 2.5,
+									"weight": 25,
 									"Description": "Bộ quy định về thẩm quyền phán quyết cấp tín dụng được rà soát, cập nhật và chuẩn hóa, phù hợp với mô hình tổ chức, quy mô và định hướng kinh doanh hiện tại; Góp phần nâng cao hiệu quả quản trị rủi ro tín dụng và chất lượng ra quyết định",
 									"division": "P.HT&GSPD",
 									"startdate": null,
@@ -149,7 +149,7 @@
 								{
 									"code": "1.2",
 									"name": "Xây dựng bộ nguyên tắc phê duyệt",
-									"weight": 2.5,
+									"weight": 25,
 									"Description": "Bộ quy định về thẩm quyền phán quyết cấp tín dụng được rà soát, cập nhật và chuẩn hóa, phù hợp với mô hình tổ chức, quy mô và định hướng kinh doanh hiện tại; Góp phần nâng cao hiệu quả quản trị rủi ro tín dụng và chất lượng ra quyết định",
 									"division": "P.PDTD",
 									"startdate": null,
@@ -176,7 +176,7 @@
 								{
 									"code": "1.3",
 									"name": "Cải tiến quy trình thẩm định và phê duyệt/Hướng dẫn thẩm định theo 1 số phân khúc, dòng sản phẩm bán lẻ",
-									"weight": 2.5,
+									"weight": 25,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": null,
 									"enddate": null
@@ -184,7 +184,7 @@
 								{
 									"code": "1.4",
 									"name": "Tinh gọn mẫu biểu Tờ trình tín dụng KHDN/KHCN và Báo cáo Thẩm định của quy trình thẩm định và phê duyệt",
-									"weight": 2.5,
+									"weight": 25,
 									"division": ["P.TĐDN", "P.TĐBL"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-04-30",
@@ -212,7 +212,7 @@
 						{
 							"code": "2",
 							"name": "Nâng cao năng suất thẩm định, phê duyệt và giám sát hồ sơ",
-							"weight": 5,
+							"weight": 14,
 							"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 							"startdate": null,
 							"enddate": null,
@@ -220,7 +220,7 @@
 								{
 									"code": "2.1",
 									"name": "Đảm bảo chất lượng thẩm định, phê duyệt, giám sát",
-									"weight": 2,
+									"weight": 50,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -266,7 +266,7 @@
 								{
 									"code": "2.2",
 									"name": "Tiếp tục hoàn thiện hệ thống Dashboard báo cáo quản lý hiệu suất thẩm định và phê duyệt",
-									"weight": 3,
+									"weight": 50,
 									"division": "P.HT&GSPD",
 									"startdate": "2026-01-01",
 									"enddate": "2026-05-31",
@@ -318,7 +318,7 @@
 						{
 							"code": "3",
 							"name": "Số hóa và công nghệ",
-							"weight": 5,
+							"weight": 29,
 							"division": ["P.HT&GSPD", "P.TĐBL"],
 							"startdate": null,
 							"enddate": null,
@@ -326,7 +326,7 @@
 								{
 									"code": "3.1",
 									"name": "Xây dựng luồng thẩm định điện tử trên chương trình CLM để tự động hóa quy trình phối hợp thẩm định giữa Đơn vị kinh doanh và Hội sở",
-									"weight": 2,
+									"weight": 17,
 									"division": ["P.HT&GSPD", "P.TĐBL"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-09-30",
@@ -438,7 +438,7 @@
 								{
 									"code": "3.2",
 									"name": "Phân luồng tự động chuyển hồ sơ đến cấp phê duyệt tín dụng trên CLM",
-									"weight": 2,
+									"weight": 17,
 									"division": "P.HT&GSPD",
 									"startdate": "2026-01-01",
 									"enddate": "2026-06-30",
@@ -447,7 +447,7 @@
 								{
 									"code": "3.3",
 									"name": "Xây dựng hệ thống lưu trữ, quản lý danh mục hồ sơ tín dụng cho giai đoạn thẩm định và phê duyệt",
-									"weight": 2,
+									"weight": 17,
 									"division": ["P.HT&GSPD", "P.TDBL", "P.TĐDN"],
 									"startdate": null,
 									"enddate": null,
@@ -481,7 +481,7 @@
 								{
 									"code": "3.4",
 									"name": "Cải tiến một số chức năng trên Chương trình CLOS",
-									"weight": 2,
+									"weight": 17,
 									"division": ["P.HT&GSPD", "P.TĐDN"],
 									"startdate": null,
 									"enddate": null,
@@ -490,7 +490,7 @@
 								{
 									"code": "3.5",
 									"name": "Xây dựng ứng dụng (App) chụp hình thẩm định đưa vào sử dụng trên toàn hệ thống",
-									"weight": 2,
+									"weight": 17,
 									"division": ["P.HT&GSPD", "P.TĐBL"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-03-31",
@@ -499,7 +499,7 @@
 								{
 									"code": "3.6",
 									"name": "Cải tiến chương trình Tờ trình điện tử",
-									"weight": 2,
+									"weight": 17,
 									"division": "P.TĐBL",
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -510,7 +510,7 @@
 						{
 							"code": "4",
 							"name": "Đào tạo hệ thống và phát triển năng lực nội bộ",
-							"weight": 5,
+							"weight": 14,
 							"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 							"startdate": "2026-01-01",
 							"enddate": "2026-12-31",
@@ -518,7 +518,7 @@
 								{
 									"code": "4.1",
 									"name": "Tham gia tối thiểu 01 khóa đào tạo/năm về quy trình/quy định thẩm quyền phê duyệt và kỹ năng thẩm định, lập tờ trình tín dụng cho các TTKD",
-									"weight": 1.25,
+									"weight": 25,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -560,7 +560,7 @@
 								{
 									"code": "4.2",
 									"name": "Tham gia đào tạo về hướng dẫn sử dụng các phần mềm/chương trình phục vụ công việc",
-									"weight": 1.25,
+									"weight": 25,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -594,7 +594,7 @@
 								{
 									"code": "4.3",
 									"name": "Tăng cường đào tạo nội bộ/thuê ngoài, nâng cao năng lực chuyên môn của CBNV",
-									"weight": 1.25,
+									"weight": 25,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -640,7 +640,7 @@
 								{
 									"code": "4.4",
 									"name": "Xây dựng văn hóa làm việc nội bộ theo phương châm “Ưu tiên hỗ trợ kinh doanh, đồng thời đảm bảo kiểm soát rủi ro”",
-									"weight": 1.25,
+									"weight": 25,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -651,7 +651,7 @@
 						{
 							"code": "5",
 							"name": "Hỗ trợ hệ thống",
-							"weight": 5,
+							"weight": 14,
 							"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 							"startdate": "2026-01-01",
 							"enddate": "2026-12-31",
@@ -659,7 +659,7 @@
 								{
 									"code": "5.1",
 									"name": "Tham gia hỗ trợ hoạt động Thanh tra, Đề án Quỹ tín dụng nhân dân Thạnh Phú",
-									"weight": 2.5,
+									"weight": 50,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -668,7 +668,7 @@
 								{
 									"code": "5.2",
 									"name": "Nâng cao chỉ số hài lòng khách hàng nội bộ",
-									"weight": 2.5,
+									"weight": 50,
 									"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 									"startdate": "2026-01-01",
 									"enddate": "2026-12-31",
@@ -689,14 +689,14 @@
 				{
 					"code": "I",
 					"name": "Tỷ lệ nghỉ việc của Đơn vị",
-					"weight": 2,
+					"weight": 40,
 					"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 					"items": []
 				},
 				{
 					"code": "II",
 					"name": "Tổ chức đào tạo nội bộ",
-					"weight": 3,
+					"weight": 60,
 					"division": ["P.TĐDN", "P.TĐBL", "P.HT&GSPD", "P.PDTD"],
 					"items": []
 				}
