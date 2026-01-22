@@ -266,6 +266,11 @@ textarea {
   font-weight: 600;
   color: var(--color-text-secondary);
   border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+.table__header-cell:last-child {
+  border-right: none;
 }
 
 .table__row {
@@ -279,7 +284,12 @@ textarea {
 .table__cell {
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
+}
+
+.table__cell:last-child {
+  border-right: none;
 }
 
 .table__cell--group {
