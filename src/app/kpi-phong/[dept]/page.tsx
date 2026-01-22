@@ -98,6 +98,7 @@ export default function KPIPhongPage() {
   const [selectedSubItem, setSelectedSubItem] = useState('');
   const [selectedDetail, setSelectedDetail] = useState('');
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null); // 'add' | 'update' | 'delete-{id}' | null
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [editingTaskData, setEditingTaskData] = useState<Partial<Task>>({});
   const [showAddForm, setShowAddForm] = useState(false);
@@ -303,27 +304,7 @@ export default function KPIPhongPage() {
   const handleAddTask = async () => {
     if (!newTask.title || !newTask.kpiItemId) return;
     
-    // Create optimistic task
-    const optimisticTask: Task = {
-      id: `temp-${Date.now()}`,
-      ...newTask,
-      department: dept,
-      kpiLevel: (kpiOptions.find(k => k.id === newTask.kpiItemId)?.level || 'item') as Task['kpiLevel'],
-      status: 'pending',
-      progress: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Optimistic update - use functional update to get latest state
-    setTasks(prev => [...prev, optimisticTask]);
-    setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', dueDate: '' });
-    setSelectedSubGroup('');
-    setSelectedItem('');
-    setSelectedSubItem('');
-    setSelectedDetail('');
-    setShowAddForm(false);
-    
+    setActionLoading('add');
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
@@ -336,26 +317,24 @@ export default function KPIPhongPage() {
       });
       
       if (res.ok) {
-        // Fetch fresh data from server to ensure sync
-        fetchTasks();
-      } else {
-        // Revert on error
-        setTasks(prev => prev.filter(t => t.id !== optimisticTask.id));
+        const data = await res.json();
+        setTasks(prev => [...prev, data]);
+        setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', dueDate: '' });
+        setSelectedSubGroup('');
+        setSelectedItem('');
+        setSelectedSubItem('');
+        setSelectedDetail('');
+        setShowAddForm(false);
       }
     } catch (err) {
       console.error('Error adding task:', err);
-      setTasks(prev => prev.filter(t => t.id !== optimisticTask.id));
+    } finally {
+      setActionLoading(null);
     }
   };
 
   const handleUpdateTask = async (taskId: string) => {
-    // Optimistic update - use functional update to get latest state
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, ...editingTaskData, updatedAt: new Date().toISOString() } : t
-    ));
-    setEditingTask(null);
-    setEditingTaskData({});
-    
+    setActionLoading(`update-${taskId}`);
     try {
       const res = await fetch('/api/tasks', {
         method: 'PUT',
@@ -363,13 +342,16 @@ export default function KPIPhongPage() {
         body: JSON.stringify({ id: taskId, ...editingTaskData })
       });
       
-      if (!res.ok) {
-        // Fetch fresh data on error
-        fetchTasks();
+      if (res.ok) {
+        const updatedTask = await res.json();
+        setTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
+        setEditingTask(null);
+        setEditingTaskData({});
       }
     } catch (err) {
       console.error('Error updating task:', err);
-      fetchTasks();
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -391,18 +373,16 @@ export default function KPIPhongPage() {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm('Bạn có chắc muốn xóa task này?')) return;
     
-    // Optimistic update - use functional update
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-    
+    setActionLoading(`delete-${taskId}`);
     try {
       const res = await fetch(`/api/tasks?id=${taskId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        // Fetch fresh data on error
-        fetchTasks();
+      if (res.ok) {
+        setTasks(prev => prev.filter(t => t.id !== taskId));
       }
     } catch (err) {
       console.error('Error deleting task:', err);
-      fetchTasks();
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -824,17 +804,17 @@ export default function KPIPhongPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-end' }}>
                   <button
                     onClick={handleAddTask}
-                    disabled={!newTask.title || !newTask.kpiItemId}
+                    disabled={!newTask.title || !newTask.kpiItemId || actionLoading === 'add'}
                     style={{
                       padding: '0.5rem 1.5rem',
-                      backgroundColor: (!newTask.title || !newTask.kpiItemId) ? '#ccc' : 'var(--color-primary)',
+                      backgroundColor: (!newTask.title || !newTask.kpiItemId || actionLoading === 'add') ? '#ccc' : 'var(--color-primary)',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
-                      cursor: (!newTask.title || !newTask.kpiItemId) ? 'not-allowed' : 'pointer'
+                      cursor: (!newTask.title || !newTask.kpiItemId || actionLoading === 'add') ? 'not-allowed' : 'pointer'
                     }}
                   >
-                    Tạo Task
+                    {actionLoading === 'add' ? 'Đang tạo...' : 'Tạo Task'}
                   </button>
                 </div>
               </div>
@@ -988,27 +968,29 @@ export default function KPIPhongPage() {
                               <>
                                 <button
                                   onClick={() => handleUpdateTask(task.id)}
+                                  disabled={actionLoading === `update-${task.id}`}
                                   style={{
                                     padding: '4px 8px',
-                                    backgroundColor: 'var(--color-success)',
+                                    backgroundColor: actionLoading === `update-${task.id}` ? '#ccc' : 'var(--color-success)',
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: '4px',
-                                    cursor: 'pointer',
+                                    cursor: actionLoading === `update-${task.id}` ? 'not-allowed' : 'pointer',
                                     fontSize: '0.75rem'
                                   }}
                                 >
-                                  ✓
+                                  {actionLoading === `update-${task.id}` ? '...' : '✓'}
                                 </button>
                                 <button
                                   onClick={cancelEditing}
+                                  disabled={actionLoading === `update-${task.id}`}
                                   style={{
                                     padding: '4px 8px',
                                     backgroundColor: 'var(--color-text-secondary)',
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: '4px',
-                                    cursor: 'pointer',
+                                    cursor: actionLoading === `update-${task.id}` ? 'not-allowed' : 'pointer',
                                     fontSize: '0.75rem'
                                   }}
                                 >
@@ -1018,13 +1000,14 @@ export default function KPIPhongPage() {
                             ) : (
                               <button
                                 onClick={() => startEditing(task)}
+                                disabled={!!actionLoading}
                                 style={{
                                   padding: '4px 8px',
-                                  backgroundColor: 'var(--color-primary)',
+                                  backgroundColor: actionLoading ? '#ccc' : 'var(--color-primary)',
                                   color: 'white',
                                   border: 'none',
                                   borderRadius: '4px',
-                                  cursor: 'pointer',
+                                  cursor: actionLoading ? 'not-allowed' : 'pointer',
                                   fontSize: '0.75rem'
                                 }}
                               >
@@ -1033,13 +1016,14 @@ export default function KPIPhongPage() {
                             )}
                             <button
                               onClick={() => handleDeleteTask(task.id)}
+                              disabled={actionLoading === `delete-${task.id}`}
                               style={{
                                 padding: '4px 8px',
-                                backgroundColor: 'var(--color-danger)',
+                                backgroundColor: actionLoading === `delete-${task.id}` ? '#ccc' : 'var(--color-danger)',
                                 color: 'white',
                                 border: 'none',
                                 borderRadius: '4px',
-                                cursor: 'pointer',
+                                cursor: actionLoading === `delete-${task.id}` ? 'not-allowed' : 'pointer',
                                 fontSize: '0.75rem'
                               }}
                             >
