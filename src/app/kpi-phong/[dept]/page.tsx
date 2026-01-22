@@ -315,8 +315,8 @@ export default function KPIPhongPage() {
       updatedAt: new Date().toISOString()
     };
     
-    // Optimistic update - add to UI immediately
-    setTasks([...tasks, optimisticTask]);
+    // Optimistic update - use functional update to get latest state
+    setTasks(prev => [...prev, optimisticTask]);
     setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', dueDate: '' });
     setSelectedSubGroup('');
     setSelectedItem('');
@@ -336,9 +336,8 @@ export default function KPIPhongPage() {
       });
       
       if (res.ok) {
-        // Replace temp task with real one from server
-        const data = await res.json();
-        setTasks(prev => prev.map(t => t.id === optimisticTask.id ? data : t));
+        // Fetch fresh data from server to ensure sync
+        fetchTasks();
       } else {
         // Revert on error
         setTasks(prev => prev.filter(t => t.id !== optimisticTask.id));
@@ -350,11 +349,10 @@ export default function KPIPhongPage() {
   };
 
   const handleUpdateTask = async (taskId: string) => {
-    // Optimistic update - update UI immediately
-    const updatedTasks = tasks.map(t => 
+    // Optimistic update - use functional update to get latest state
+    setTasks(prev => prev.map(t => 
       t.id === taskId ? { ...t, ...editingTaskData, updatedAt: new Date().toISOString() } : t
-    );
-    setTasks(updatedTasks);
+    ));
     setEditingTask(null);
     setEditingTaskData({});
     
@@ -366,12 +364,12 @@ export default function KPIPhongPage() {
       });
       
       if (!res.ok) {
-        // Revert on error
+        // Fetch fresh data on error
         fetchTasks();
       }
     } catch (err) {
       console.error('Error updating task:', err);
-      fetchTasks(); // Revert on error
+      fetchTasks();
     }
   };
 
@@ -393,19 +391,18 @@ export default function KPIPhongPage() {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm('Bạn có chắc muốn xóa task này?')) return;
     
-    // Optimistic update - remove from UI immediately
-    const previousTasks = [...tasks];
-    setTasks(tasks.filter(t => t.id !== taskId));
+    // Optimistic update - use functional update
+    setTasks(prev => prev.filter(t => t.id !== taskId));
     
     try {
       const res = await fetch(`/api/tasks?id=${taskId}`, { method: 'DELETE' });
       if (!res.ok) {
-        // Revert on error
-        setTasks(previousTasks);
+        // Fetch fresh data on error
+        fetchTasks();
       }
     } catch (err) {
       console.error('Error deleting task:', err);
-      setTasks(previousTasks); // Revert on error
+      fetchTasks();
     }
   };
 
