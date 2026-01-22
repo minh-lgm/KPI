@@ -303,6 +303,27 @@ export default function KPIPhongPage() {
   const handleAddTask = async () => {
     if (!newTask.title || !newTask.kpiItemId) return;
     
+    // Create optimistic task
+    const optimisticTask: Task = {
+      id: `temp-${Date.now()}`,
+      ...newTask,
+      department: dept,
+      kpiLevel: (kpiOptions.find(k => k.id === newTask.kpiItemId)?.level || 'item') as Task['kpiLevel'],
+      status: 'pending',
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Optimistic update - add to UI immediately
+    setTasks([...tasks, optimisticTask]);
+    setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', dueDate: '' });
+    setSelectedSubGroup('');
+    setSelectedItem('');
+    setSelectedSubItem('');
+    setSelectedDetail('');
+    setShowAddForm(false);
+    
     try {
       const res = await fetch('/api/tasks', {
         method: 'POST',
@@ -315,20 +336,28 @@ export default function KPIPhongPage() {
       });
       
       if (res.ok) {
-        setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', dueDate: '' });
-        setSelectedSubGroup('');
-        setSelectedItem('');
-        setSelectedSubItem('');
-        setSelectedDetail('');
-        setShowAddForm(false);
-        fetchTasks();
+        // Replace temp task with real one from server
+        const data = await res.json();
+        setTasks(prev => prev.map(t => t.id === optimisticTask.id ? data : t));
+      } else {
+        // Revert on error
+        setTasks(prev => prev.filter(t => t.id !== optimisticTask.id));
       }
     } catch (err) {
       console.error('Error adding task:', err);
+      setTasks(prev => prev.filter(t => t.id !== optimisticTask.id));
     }
   };
 
   const handleUpdateTask = async (taskId: string) => {
+    // Optimistic update - update UI immediately
+    const updatedTasks = tasks.map(t => 
+      t.id === taskId ? { ...t, ...editingTaskData, updatedAt: new Date().toISOString() } : t
+    );
+    setTasks(updatedTasks);
+    setEditingTask(null);
+    setEditingTaskData({});
+    
     try {
       const res = await fetch('/api/tasks', {
         method: 'PUT',
@@ -336,13 +365,13 @@ export default function KPIPhongPage() {
         body: JSON.stringify({ id: taskId, ...editingTaskData })
       });
       
-      if (res.ok) {
-        setEditingTask(null);
-        setEditingTaskData({});
+      if (!res.ok) {
+        // Revert on error
         fetchTasks();
       }
     } catch (err) {
       console.error('Error updating task:', err);
+      fetchTasks(); // Revert on error
     }
   };
 
@@ -364,13 +393,19 @@ export default function KPIPhongPage() {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm('Bạn có chắc muốn xóa task này?')) return;
     
+    // Optimistic update - remove from UI immediately
+    const previousTasks = [...tasks];
+    setTasks(tasks.filter(t => t.id !== taskId));
+    
     try {
       const res = await fetch(`/api/tasks?id=${taskId}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchTasks();
+      if (!res.ok) {
+        // Revert on error
+        setTasks(previousTasks);
       }
     } catch (err) {
       console.error('Error deleting task:', err);
+      setTasks(previousTasks); // Revert on error
     }
   };
 
