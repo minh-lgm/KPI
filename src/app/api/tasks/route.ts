@@ -24,7 +24,13 @@ const TASKS_KEY = 'tasks';
 
 // Check if running on Netlify
 function isNetlify(): boolean {
-  return !!process.env.NETLIFY || !!process.env.NETLIFY_BLOBS_CONTEXT;
+  const isNetlifyEnv = !!process.env.NETLIFY || !!process.env.NETLIFY_BLOBS_CONTEXT;
+  console.log('isNetlify check:', { 
+    NETLIFY: process.env.NETLIFY, 
+    NETLIFY_BLOBS_CONTEXT: !!process.env.NETLIFY_BLOBS_CONTEXT,
+    result: isNetlifyEnv 
+  });
+  return isNetlifyEnv;
 }
 
 // Read tasks from Netlify Blobs or local file

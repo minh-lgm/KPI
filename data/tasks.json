@@ -16,21 +16,6 @@
       "updatedAt": "2026-01-22T08:06:13.341Z"
     },
     {
-      "id": "task-1769050354991",
-      "title": "BRD nhắc thời gian xử lý",
-      "description": "mô tả chi tiết BRD nhắc thời gian xử lý",
-      "assignee": "ngantt",
-      "kpiCode": "3.1.1",
-      "kpiItemId": "kpi-31",
-      "kpiLevel": "detail",
-      "department": "P.HT&GSPD",
-      "status": "in_progress",
-      "progress": 75,
-      "dueDate": "2026-03-12",
-      "createdAt": "2026-01-22T02:52:34.991Z",
-      "updatedAt": "2026-01-22T02:52:58.724Z"
-    },
-    {
       "id": "task-1769064565577",
       "title": "Cải tiến quy trình 2222",
       "description": "",
