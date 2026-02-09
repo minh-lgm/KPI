@@ -1,9 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 import StatCard from '@/components/StatCard';
 import ProgressBar from '@/components/ProgressBar';
+import SkeletonCard from '@/components/ui/SkeletonCard';
 import { DepartmentBarChart, KPIGroupPieChart, ProgressOverviewChart } from '@/components/KPIChart';
+import { 
+  pageTransitionVariants, 
+  staggerContainerVariants, 
+  staggerItemVariants,
+  chartAnimationVariants 
+} from '@/lib/animations';
 
 interface DepartmentAssignment {
   department: string;
@@ -75,8 +84,11 @@ export default function Dashboard() {
       if (!res.ok) throw new Error('Failed to fetch');
       const json = await res.json();
       setData(json);
+      toast.success('Đã tải dữ liệu KPI thành công');
     } catch (err) {
-      setError('Không thể tải dữ liệu KPI');
+      const errorMessage = 'Không thể tải dữ liệu KPI';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -84,17 +96,56 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <p>Đang tải dữ liệu...</p>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <div className="page-header">
+          <h1 className="page-header__title">Dashboard</h1>
+          <p className="page-header__subtitle">Tổng quan tiến độ KPI Khối Thẩm định & Phê duyệt</p>
+        </div>
+        
+        <motion.div 
+          className="stats-grid"
+          variants={staggerContainerVariants}
+          initial="initial"
+          animate="animate"
+        >
+          {[1, 2, 3, 4].map(i => (
+            <motion.div key={i} variants={staggerItemVariants}>
+              <SkeletonCard variant="stats" />
+            </motion.div>
+          ))}
+        </motion.div>
+        
+        <motion.div 
+          className="charts-grid"
+          variants={staggerContainerVariants}
+          initial="initial"
+          animate="animate"
+          style={{ marginTop: '2rem' }}
+        >
+          {[1, 2].map(i => (
+            <motion.div key={i} variants={staggerItemVariants}>
+              <SkeletonCard variant="chart" />
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.div>
     );
   }
 
   if (error || !data) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-danger)' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-danger)' }}
+      >
         <p>{error || 'Đã xảy ra lỗi'}</p>
-      </div>
+      </motion.div>
     );
   }
 
@@ -116,66 +167,126 @@ export default function Dashboard() {
   }));
 
   return (
-    <>
-      <div className="page-header">
-        <h1 className="page-header__title">Dashboard</h1>
-        <p className="page-header__subtitle">Tổng quan tiến độ KPI Khối Thẩm định & Phê duyệt</p>
-      </div>
+    <AnimatePresence mode="wait">
+      <motion.div
+        key="dashboard"
+        variants={pageTransitionVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
+        <motion.div className="page-header" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+          <h1 className="page-header__title">Dashboard</h1>
+          <p className="page-header__subtitle">Tổng quan tiến độ KPI Khối Thẩm định & Phê duyệt</p>
+        </motion.div>
 
-      <div className="stats-grid">
-        <StatCard
-          label="Tiến độ KPI Khối"
-          value={data.khoiProgress.toFixed(1)}
-          suffix="%"
-          variant={getProgressVariant(data.khoiProgress)}
-        />
-        <StatCard
-          label="Số nhóm KPI"
-          value={data.groups.length}
-        />
-        <StatCard
-          label="Số phòng ban"
-          value={data.departmentProgress.length}
-        />
-        <StatCard
-          label="Tổng số đầu việc"
-          value={data.groups.reduce((sum, g) => sum + g.subGroups.reduce((s, sg) => s + sg.items.length, 0), 0)}
-        />
-      </div>
+        <motion.div 
+          className="stats-grid"
+          variants={staggerContainerVariants}
+          initial="initial"
+          animate="animate"
+        >
+          <motion.div variants={staggerItemVariants}>
+            <StatCard
+              label="Tiến độ KPI Khối"
+              value={data.khoiProgress.toFixed(1)}
+              suffix="%"
+              variant={getProgressVariant(data.khoiProgress)}
+              animated={true}
+            />
+          </motion.div>
+          <motion.div variants={staggerItemVariants}>
+            <StatCard
+              label="Số nhóm KPI"
+              value={data.groups.length}
+              animated={true}
+            />
+          </motion.div>
+          <motion.div variants={staggerItemVariants}>
+            <StatCard
+              label="Số phòng ban"
+              value={data.departmentProgress.length}
+              animated={true}
+            />
+          </motion.div>
+          <motion.div variants={staggerItemVariants}>
+            <StatCard
+              label="Tổng số đầu việc"
+              value={data.groups.reduce((sum, g) => sum + g.subGroups.reduce((s, sg) => s + sg.items.length, 0), 0)}
+              animated={true}
+            />
+          </motion.div>
+        </motion.div>
 
-      <div className="charts-grid">
-        <DepartmentBarChart data={deptChartData} />
-        <KPIGroupPieChart data={groupChartData} />
-      </div>
+        <motion.div 
+          className="charts-grid"
+          variants={chartAnimationVariants}
+          initial="initial"
+          animate="animate"
+          transition={{ delay: 0.4 }}
+        >
+          <DepartmentBarChart data={deptChartData} />
+          <KPIGroupPieChart data={groupChartData} />
+        </motion.div>
 
-      <div className="charts-grid">
-        <ProgressOverviewChart data={groupChartData} />
-      </div>
+        <motion.div 
+          className="charts-grid"
+          variants={chartAnimationVariants}
+          initial="initial"
+          animate="animate"
+          transition={{ delay: 0.6 }}
+        >
+          <ProgressOverviewChart data={groupChartData} />
+        </motion.div>
 
-      <div className="card" style={{ marginTop: 'var(--spacing-xl)' }}>
-        <div className="card__header">
-          <h3 className="card__title">Tiến độ theo Phòng</h3>
-        </div>
-        <div className="card__body">
-          <div className="dept-grid">
-            {data.departmentProgress.map((dept) => (
-              <div key={dept.code} className="dept-card">
-                <div className="dept-card__header">
-                  <div>
-                    <div className="dept-card__name">{dept.code}</div>
-                    <div className="dept-card__code">{dept.name}</div>
-                  </div>
-                  <div className={`dept-card__progress`} style={{ color: `var(--color-${getProgressVariant(dept.progress)})` }}>
-                    {dept.progress.toFixed(1)}%
-                  </div>
-                </div>
-                <ProgressBar value={dept.progress} />
-              </div>
-            ))}
+        <motion.div 
+          className="card" 
+          style={{ marginTop: 'var(--spacing-xl)' }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 0.4 }}
+        >
+          <div className="card__header">
+            <h3 className="card__title">Tiến độ theo Phòng</h3>
           </div>
-        </div>
-      </div>
-    </>
+          <div className="card__body">
+            <motion.div 
+              className="dept-grid"
+              variants={staggerContainerVariants}
+              initial="initial"
+              animate="animate"
+            >
+              {data.departmentProgress.map((dept, index) => (
+                <motion.div 
+                  key={dept.code} 
+                  className="dept-card"
+                  variants={staggerItemVariants}
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <div className="dept-card__header">
+                    <div>
+                      <div className="dept-card__name">{dept.code}</div>
+                      <div className="dept-card__code">{dept.name}</div>
+                    </div>
+                    <motion.div 
+                      className={`dept-card__progress`} 
+                      style={{ color: `var(--color-${getProgressVariant(dept.progress)})` }}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 1 + index * 0.1, type: "spring", stiffness: 300 }}
+                    >
+                      {dept.progress.toFixed(1)}%
+                    </motion.div>
+                  </div>
+                  <ProgressBar value={dept.progress} animated={true} delay={1.2 + index * 0.1} />
+                </motion.div>
+              ))}
+            </motion.div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 

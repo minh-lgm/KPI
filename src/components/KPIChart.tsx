@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import {
   BarChart,
   Bar,
@@ -31,7 +32,13 @@ const COLORS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 export function DepartmentBarChart({ data }: { data: DepartmentData[] }) {
   return (
-    <div className="card">
+    <motion.div 
+      className="card"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+      whileHover={{ scale: 1.01 }}
+    >
       <div className="card__header">
         <h3 className="card__title">Tiến độ KPI theo Phòng</h3>
       </div>
@@ -42,17 +49,29 @@ export function DepartmentBarChart({ data }: { data: DepartmentData[] }) {
             <XAxis type="number" domain={[0, 100]} unit="%" />
             <YAxis type="category" dataKey="name" width={100} />
             <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
-            <Bar dataKey="progress" fill="#2563eb" radius={[0, 4, 4, 0]} />
+            <Bar 
+              dataKey="progress" 
+              fill="#2563eb" 
+              radius={[0, 4, 4, 0]} 
+              animationDuration={1500}
+              animationBegin={500}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 export function KPIGroupPieChart({ data }: { data: GroupData[] }) {
   return (
-    <div className="card">
+    <motion.div 
+      className="card"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, delay: 0.2 }}
+      whileHover={{ scale: 1.01 }}
+    >
       <div className="card__header">
         <h3 className="card__title">Phân bổ trọng số KPI Khối</h3>
       </div>
@@ -69,6 +88,8 @@ export function KPIGroupPieChart({ data }: { data: GroupData[] }) {
               dataKey="weight"
               nameKey="name"
               label={({ name, value }) => `${name}: ${value}%`}
+              animationBegin={500}
+              animationDuration={1500}
             >
               {data.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -78,13 +99,19 @@ export function KPIGroupPieChart({ data }: { data: GroupData[] }) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 export function ProgressOverviewChart({ data }: { data: GroupData[] }) {
   return (
-    <div className="card">
+    <motion.div 
+      className="card"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, delay: 0.3 }}
+      whileHover={{ scale: 1.01 }}
+    >
       <div className="card__header">
         <h3 className="card__title">Tiến độ theo nhóm KPI</h3>
       </div>
@@ -96,11 +123,25 @@ export function ProgressOverviewChart({ data }: { data: GroupData[] }) {
             <YAxis domain={[0, 100]} unit="%" />
             <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
             <Legend />
-            <Bar dataKey="progress" name="Tiến độ" fill="#10b981" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="weight" name="Trọng số" fill="#2563eb" radius={[4, 4, 0, 0]} />
+            <Bar 
+              dataKey="progress" 
+              name="Tiến độ" 
+              fill="#10b981" 
+              radius={[4, 4, 0, 0]} 
+              animationDuration={1500}
+              animationBegin={700}
+            />
+            <Bar 
+              dataKey="weight" 
+              name="Trọng số" 
+              fill="#2563eb" 
+              radius={[4, 4, 0, 0]} 
+              animationDuration={1500}
+              animationBegin={900}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </motion.div>
   );
 }

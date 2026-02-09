@@ -1,7 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 import ProgressBar from '@/components/ProgressBar';
+import SkeletonCard from '@/components/ui/SkeletonCard';
+import { 
+  pageTransitionVariants,
+  staggerContainerVariants,
+  staggerItemVariants,
+  fadeInVariants 
+} from '@/lib/animations';
 
 interface DepartmentAssignment {
   department: string;
@@ -67,8 +76,10 @@ export default function KPIKhoiContent() {
       const json = await res.json();
       setData(json);
       setExpandedGroups(new Set(json.groups.map((g: KPIGroup) => g.code)));
+      toast.success('Đã tải dữ liệu KPI Khối thành công');
     } catch (err) {
       console.error(err);
+      toast.error('Không thể tải dữ liệu KPI Khối');
     } finally {
       setLoading(false);
     }
@@ -149,7 +160,30 @@ export default function KPIKhoiContent() {
   };
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center' }}>Đang tải...</div>;
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <div className="page-header">
+          <h1 className="page-header__title">KPI Khối Thẩm định & Phê duyệt</h1>
+          <p className="page-header__subtitle">Theo dõi chi tiết các KPI của khối</p>
+        </div>
+        
+        <motion.div 
+          variants={staggerContainerVariants}
+          initial="initial"
+          animate="animate"
+        >
+          {[1, 2, 3].map(i => (
+            <motion.div key={i} variants={staggerItemVariants} style={{ marginBottom: '1rem' }}>
+              <SkeletonCard variant="table" />
+            </motion.div>
+          ))}
+        </motion.div>
+      </motion.div>
+    );
   }
 
   if (!data) {
