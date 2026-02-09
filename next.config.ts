@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Include data folder in serverless functions
+  outputFileTracingIncludes: {
+    '/api/*': ['./data/**/*'],
+  },
 };
 
 export default nextConfig;

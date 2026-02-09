@@ -210,6 +210,15 @@ function createDepartments(
 
 export function readKPIData(): KPIGroup[] {
   const dataFile = getKPIDataFilePath();
+  console.log('Reading KPI data from:', dataFile);
+  console.log('File exists:', fs.existsSync(dataFile));
+  console.log('Current working directory:', process.cwd());
+  
+  if (!fs.existsSync(dataFile)) {
+    console.error('KPI data file not found at:', dataFile);
+    throw new Error(`KPI data file not found: ${dataFile}`);
+  }
+  
   const fileContent = fs.readFileSync(dataFile, 'utf-8');
   // Remove comments from JSON (// comments)
   const cleanedContent = fileContent.replace(/\/\/.*$/gm, '');
