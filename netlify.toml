@@ -1,17 +1,16 @@
+[[redirects]]
+  from = "/api/kpi"
+  to = "/.netlify/functions/kpi-handler"
+  status = 200
+
+[[redirects]]
+  from = "/api/kpi/progress"
+  to = "/.netlify/functions/kpi-handler"
+  status = 200
+
 [build]
   command = "npm run build"
   publish = ".next"
 
 [build.environment]
-  NODE_VERSION = "20.9.0"
-
-# Next.js on Netlify
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-
-# Redirect all traffic to HTTPS
-[[redirects]]
-  from = "http://*"
-  to = "https://:splat"
-  status = 301
-  force = true
+  NEXT_TURBOPACK = "false"
