@@ -21,6 +21,25 @@ interface DepartmentAssignment {
   progress: number;
 }
 
+interface KPISubDetail {
+  id: string;
+  code: string;
+  name: string;
+  weight: number;
+  description: string;
+  departments: DepartmentAssignment[];
+}
+
+interface KPIDetail {
+  id: string;
+  code: string;
+  name: string;
+  weight: number;
+  description: string;
+  departments: DepartmentAssignment[];
+  subDetails: KPISubDetail[];
+}
+
 interface KPISubItem {
   id: string;
   code: string;
@@ -28,6 +47,7 @@ interface KPISubItem {
   weight: number;
   description: string;
   departments: DepartmentAssignment[];
+  details: KPIDetail[];
 }
 
 interface KPIItem {
@@ -347,42 +367,144 @@ export default function KPIKhoiContent() {
                                 
                                 {/* Level 4: SubItems */}
                                 {item.subItems.length > 0 && expandedGroups.has(item.id) && item.subItems.map((subItem) => (
-                                  <tr key={subItem.id} className="table__row">
-                                    <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
-                                    <td className="table__cell">{subItem.code}</td>
-                                    <td className="table__cell">
-                                      <div>{subItem.name}</div>
-                                      {subItem.description && (
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-                                          {subItem.description.substring(0, 100)}
-                                          {subItem.description.length > 100 ? '...' : ''}
+                                  <React.Fragment key={subItem.id}>
+                                    <tr 
+                                      className="table__row"
+                                      style={{ 
+                                        cursor: subItem.details && subItem.details.length > 0 ? 'pointer' : 'default',
+                                        backgroundColor: subItem.details && subItem.details.length > 0 ? 'rgba(16, 185, 129, 0.05)' : undefined
+                                      }}
+                                      onClick={() => subItem.details && subItem.details.length > 0 && toggleGroup(subItem.id)}
+                                    >
+                                      <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
+                                        {subItem.details && subItem.details.length > 0 ? (expandedGroups.has(subItem.id) ? '▼' : '▶') : ''}
+                                      </td>
+                                      <td className="table__cell">{subItem.code}</td>
+                                      <td className="table__cell">
+                                        <div>{subItem.name}</div>
+                                        {subItem.description && (
+                                          <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                                            {subItem.description.substring(0, 100)}
+                                            {subItem.description.length > 100 ? '...' : ''}
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="table__cell">{subItem.weight}%</td>
+                                      <td className="table__cell">
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                          {subItem.departments.map((dept, idx) => (
+                                            <span key={idx} className={`badge ${getDeptBadgeClass(dept.department)}`}>
+                                              {dept.department}
+                                            </span>
+                                          ))}
                                         </div>
-                                      )}
-                                    </td>
-                                    <td className="table__cell">{subItem.weight}%</td>
-                                    <td className="table__cell">
-                                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                        {subItem.departments.map((dept, idx) => (
-                                          <span key={idx} className={`badge ${getDeptBadgeClass(dept.department)}`}>
-                                            {dept.department}
-                                          </span>
+                                      </td>
+                                      <td className="table__cell">
+                                        {subItem.departments.length === 1 ? subItem.departments[0].startDate : '-'}
+                                      </td>
+                                      <td className="table__cell">
+                                        {subItem.departments.length === 1 ? subItem.departments[0].endDate : '-'}
+                                      </td>
+                                      <td className="table__cell">
+                                        <ProgressBar 
+                                          value={subItem.departments.reduce((sum, d) => sum + d.progress * d.weight, 0) / 
+                                                 Math.max(subItem.departments.reduce((sum, d) => sum + d.weight, 0), 1)} 
+                                          showLabel 
+                                        />
+                                      </td>
+                                    </tr>
+                                    
+                                    {/* Level 5: Details */}
+                                    {subItem.details && subItem.details.length > 0 && expandedGroups.has(subItem.id) && subItem.details.map((detail) => (
+                                      <React.Fragment key={detail.id}>
+                                        <tr 
+                                          className="table__row"
+                                          style={{ 
+                                            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                                            cursor: detail.subDetails && detail.subDetails.length > 0 ? 'pointer' : 'default'
+                                          }}
+                                          onClick={() => detail.subDetails && detail.subDetails.length > 0 && toggleGroup(detail.id)}
+                                        >
+                                          <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
+                                            {detail.subDetails && detail.subDetails.length > 0 ? (expandedGroups.has(detail.id) ? '▼' : '▶') : ''}
+                                          </td>
+                                          <td className="table__cell">{detail.code}</td>
+                                          <td className="table__cell">
+                                            <div>{detail.name}</div>
+                                            {detail.description && (
+                                              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                                                {detail.description.substring(0, 100)}
+                                                {detail.description.length > 100 ? '...' : ''}
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td className="table__cell">{detail.weight}%</td>
+                                          <td className="table__cell">
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                              {detail.departments.map((dept, idx) => (
+                                                <span key={idx} className={`badge ${getDeptBadgeClass(dept.department)}`}>
+                                                  {dept.department}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </td>
+                                          <td className="table__cell">
+                                            {detail.departments.length === 1 ? detail.departments[0].startDate : '-'}
+                                          </td>
+                                          <td className="table__cell">
+                                            {detail.departments.length === 1 ? detail.departments[0].endDate : '-'}
+                                          </td>
+                                          <td className="table__cell">
+                                            <ProgressBar 
+                                              value={detail.departments.reduce((sum, d) => sum + d.progress * d.weight, 0) / 
+                                                     Math.max(detail.departments.reduce((sum, d) => sum + d.weight, 0), 1)} 
+                                              showLabel 
+                                            />
+                                          </td>
+                                        </tr>
+                                        
+                                        {/* Level 6: SubDetails */}
+                                        {detail.subDetails && detail.subDetails.length > 0 && expandedGroups.has(detail.id) && detail.subDetails.map((subDetail) => (
+                                          <tr key={subDetail.id} className="table__row" style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
+                                            <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
+                                            <td className="table__cell">{subDetail.code}</td>
+                                            <td className="table__cell">
+                                              <div>{subDetail.name}</div>
+                                              {subDetail.description && (
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                                                  {subDetail.description.substring(0, 100)}
+                                                  {subDetail.description.length > 100 ? '...' : ''}
+                                                </div>
+                                              )}
+                                            </td>
+                                            <td className="table__cell">{subDetail.weight}%</td>
+                                            <td className="table__cell">
+                                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                {subDetail.departments.map((dept, idx) => (
+                                                  <span key={idx} className={`badge ${getDeptBadgeClass(dept.department)}`}>
+                                                    {dept.department}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                            </td>
+                                            <td className="table__cell">
+                                              {subDetail.departments.length === 1 ? subDetail.departments[0].startDate : '-'}
+                                            </td>
+                                            <td className="table__cell">
+                                              {subDetail.departments.length === 1 ? subDetail.departments[0].endDate : '-'}
+                                            </td>
+                                            <td className="table__cell">
+                                              <ProgressBar 
+                                                value={subDetail.departments.reduce((sum, d) => sum + d.progress * d.weight, 0) / 
+                                                       Math.max(subDetail.departments.reduce((sum, d) => sum + d.weight, 0), 1)} 
+                                                showLabel 
+                                              />
+                                            </td>
+                                          </tr>
                                         ))}
-                                      </div>
-                                    </td>
-                                    <td className="table__cell">
-                                      {subItem.departments.length === 1 ? subItem.departments[0].startDate : '-'}
-                                    </td>
-                                    <td className="table__cell">
-                                      {subItem.departments.length === 1 ? subItem.departments[0].endDate : '-'}
-                                    </td>
-                                    <td className="table__cell">
-                                      <ProgressBar 
-                                        value={subItem.departments.reduce((sum, d) => sum + d.progress * d.weight, 0) / 
-                                               Math.max(subItem.departments.reduce((sum, d) => sum + d.weight, 0), 1)} 
-                                        showLabel 
-                                      />
-                                    </td>
-                                  </tr>
+                                      </React.Fragment>
+                                    ))}
+                                  </React.Fragment>
                                 ))}
                               </React.Fragment>
                             ))}
