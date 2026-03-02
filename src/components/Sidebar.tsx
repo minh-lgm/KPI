@@ -15,6 +15,7 @@ export default function Sidebar() {
     { href: '/', label: 'Dashboard', icon: '📊' },
     { href: '/kpi-khoi', label: 'KPI Khối', icon: '🏢' },
     { href: '/kpi-phong', label: 'KPI Phòng', icon: '👥' },
+    { href: '/schedule', label: 'Schedule', icon: '📅' },
   ];
 
   const isActive = (href: string) => {
