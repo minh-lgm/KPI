@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+import Layout from '@/components/Layout';
 
 interface Task {
   id: string;
@@ -44,6 +45,7 @@ export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [filterDept, setFilterDept] = useState<string>('');
 
   useEffect(() => {
     setCurrentDate(new Date());
@@ -65,10 +67,16 @@ export default function SchedulePage() {
     }
   };
 
+  // Get unique departments from tasks
+  const departments = Array.from(new Set(tasks.map(t => t.department))).sort();
+
+  // Get filtered tasks
+  const filteredTasks = filterDept ? tasks.filter(t => t.department === filterDept) : tasks;
+
   // Get tasks for a specific date
   const getTasksForDate = (date: Date): Task[] => {
     const dateStr = date.toISOString().split('T')[0];
-    return tasks.filter(t => t.dueDate === dateStr);
+    return filteredTasks.filter(t => t.dueDate === dateStr);
   };
 
   // Get first day of month
@@ -181,26 +189,29 @@ export default function SchedulePage() {
 
   if (loading || !currentDate) {
     return (
-      <div className="page-header">
-        <h1 className="page-header__title">Schedule</h1>
-        <p className="page-header__subtitle">Đang tải...</p>
-      </div>
+      <Layout>
+        <div className="page-header">
+          <h1 className="page-header__title">Schedule</h1>
+          <p className="page-header__subtitle">Đang tải...</p>
+        </div>
+      </Layout>
     );
   }
 
   return (
+    <Layout>
     <div>
       <div className="page-header">
         <h1 className="page-header__title">Schedule</h1>
         <p className="page-header__subtitle">
-          Lịch deadline các task - Tổng: <strong>{tasks.length}</strong> tasks
+          Lịch deadline các task - Tổng: <strong>{filteredTasks.length}</strong> tasks
         </p>
       </div>
 
       {/* Controls */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <div className="card__body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button 
               onClick={() => setViewMode('month')}
               className={`btn ${viewMode === 'month' ? 'btn--primary' : 'btn--secondary'}`}
@@ -213,6 +224,16 @@ export default function SchedulePage() {
             >
               Tuần
             </button>
+            <select
+              value={filterDept}
+              onChange={(e) => setFilterDept(e.target.value)}
+              style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '0.85rem' }}
+            >
+              <option value="">Tất cả phòng ban</option>
+              {departments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -324,22 +345,15 @@ export default function SchedulePage() {
                           backgroundColor: statusColors[task.status],
                           color: 'white',
                           cursor: 'pointer',
-                          whiteSpace: 'nowrap',
                           overflow: 'hidden',
-                          textOverflow: 'ellipsis',
                           borderLeft: `3px solid ${departmentColors[task.department] || '#666'}`
                         }}
                         title={`${task.title} - ${task.department}`}
                       >
-                        {viewMode === 'week' && (
-                          <div style={{ fontWeight: 600, marginBottom: '2px' }}>{task.department}</div>
-                        )}
-                        {task.title}
-                        {viewMode === 'week' && (
-                          <div style={{ opacity: 0.8, marginTop: '2px' }}>
-                            {task.assignee || 'Chưa phân công'} • {task.progress}%
-                          </div>
-                        )}
+                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.title}</div>
+                        <div style={{ opacity: 0.85, marginTop: '2px', fontSize: '0.65rem' }}>
+                          {task.department} • {task.progress}%
+                        </div>
                       </div>
                     ))}
                     {viewMode === 'month' && dayTasks.length > 3 && (
@@ -371,21 +385,6 @@ export default function SchedulePage() {
                   fontSize: '0.75rem'
                 }}>
                   {label}
-                </span>
-              ))}
-            </div>
-            <div>
-              <strong style={{ marginRight: '1rem' }}>Phòng ban:</strong>
-              {Object.entries(departmentColors).map(([dept, color]) => (
-                <span key={dept} style={{ 
-                  marginRight: '1rem',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  backgroundColor: color,
-                  color: 'white',
-                  fontSize: '0.75rem'
-                }}>
-                  {dept}
                 </span>
               ))}
             </div>
@@ -491,5 +490,6 @@ export default function SchedulePage() {
         </div>
       )}
     </div>
+    </Layout>
   );
 }
