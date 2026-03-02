@@ -350,7 +350,7 @@ export default function SchedulePage() {
                         }}
                         title={`${task.title} - ${task.department}`}
                       >
-                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{task.title}</div>
+                        <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{task.title}</div>
                         <div style={{ opacity: 0.85, marginTop: '2px', fontSize: '0.65rem' }}>
                           {task.department} • {task.progress}%
                         </div>
