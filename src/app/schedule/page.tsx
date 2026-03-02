@@ -42,10 +42,11 @@ export default function SchedulePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
   useEffect(() => {
+    setCurrentDate(new Date());
     fetchTasks();
   }, []);
 
@@ -82,6 +83,7 @@ export default function SchedulePage() {
 
   // Get days in month view (including padding days from prev/next month)
   const getMonthDays = (): Date[] => {
+    if (!currentDate) return [];
     const firstDay = getFirstDayOfMonth(currentDate);
     const lastDay = getLastDayOfMonth(currentDate);
     const days: Date[] = [];
@@ -112,6 +114,7 @@ export default function SchedulePage() {
 
   // Get days in week view
   const getWeekDays = (): Date[] => {
+    if (!currentDate) return [];
     const days: Date[] = [];
     const startOfWeek = new Date(currentDate);
     const day = startOfWeek.getDay();
@@ -128,6 +131,7 @@ export default function SchedulePage() {
 
   // Navigation
   const goToPrevious = () => {
+    if (!currentDate) return;
     const newDate = new Date(currentDate);
     if (viewMode === 'month') {
       newDate.setMonth(newDate.getMonth() - 1);
@@ -138,6 +142,7 @@ export default function SchedulePage() {
   };
 
   const goToNext = () => {
+    if (!currentDate) return;
     const newDate = new Date(currentDate);
     if (viewMode === 'month') {
       newDate.setMonth(newDate.getMonth() + 1);
@@ -168,12 +173,13 @@ export default function SchedulePage() {
   };
 
   const isCurrentMonth = (date: Date): boolean => {
+    if (!currentDate) return false;
     return date.getMonth() === currentDate.getMonth();
   };
 
   const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
-  if (loading) {
+  if (loading || !currentDate) {
     return (
       <div className="page-header">
         <h1 className="page-header__title">Schedule</h1>
