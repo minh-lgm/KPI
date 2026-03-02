@@ -55,7 +55,7 @@ export default function SchedulePage() {
       const res = await fetch('/api/tasks');
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
-      setTasks(data);
+      setTasks(data.tasks || []);
       toast.success('Đã tải lịch công việc');
     } catch (err) {
       console.error(err);
