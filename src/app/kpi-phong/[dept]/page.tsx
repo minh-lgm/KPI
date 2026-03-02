@@ -1169,28 +1169,65 @@ export default function KPIPhongPage() {
                                 
                                 {/* Level 5: Details */}
                                 {expandedGroups.has(subItem.id) && subItem.details?.map((detail: any) => (
-                                  <tr key={detail.id} className="table__row" style={{ backgroundColor: 'rgba(37, 99, 235, 0.02)' }}>
-                                    <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
-                                    <td className="table__cell">{detail.code}</td>
-                                    <td className="table__cell">{detail.name}</td>
-                                    <td className="table__cell">{formatDate(detail.departments[0]?.startDate)}</td>
-                                    <td className="table__cell">{formatDate(detail.departments[0]?.endDate)}</td>
-                                    <td className="table__cell">
-                                      <ProgressBar value={getDetailProgress(detail)} showLabel />
-                                    </td>
-                                    <td className="table__cell">
-                                      {tasks.filter(t => t.kpiItemId === detail.id).length > 0 && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                          {tasks.filter(t => t.kpiItemId === detail.id).map(t => (
-                                            <div key={t.id} style={{ fontSize: '0.75rem', padding: '4px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
-                                              <div>{t.title} ({t.progress}%)</div>
-                                              {t.dueDate && <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>Ngày đến hạn: {formatDate(t.dueDate)}</div>}
+                                  <React.Fragment key={detail.id}>
+                                    <tr 
+                                      className="table__row" 
+                                      style={{ 
+                                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                                        cursor: detail.subDetails?.length > 0 ? 'pointer' : 'default'
+                                      }}
+                                      onClick={() => detail.subDetails?.length > 0 && toggleGroup(detail.id)}
+                                    >
+                                      <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}>
+                                        {detail.subDetails?.length > 0 ? (expandedGroups.has(detail.id) ? '▼' : '▶') : ''}
+                                      </td>
+                                      <td className="table__cell">{detail.code}</td>
+                                      <td className="table__cell">{detail.name}</td>
+                                      <td className="table__cell">{formatDate(detail.departments[0]?.startDate)}</td>
+                                      <td className="table__cell">{formatDate(detail.departments[0]?.endDate)}</td>
+                                      <td className="table__cell">
+                                        <ProgressBar value={getDetailProgress(detail)} showLabel />
+                                      </td>
+                                      <td className="table__cell">
+                                        {tasks.filter(t => t.kpiItemId === detail.id).length > 0 && (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                            {tasks.filter(t => t.kpiItemId === detail.id).map(t => (
+                                              <div key={t.id} style={{ fontSize: '0.75rem', padding: '4px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
+                                                <div>{t.title} ({t.progress}%)</div>
+                                                {t.dueDate && <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>Ngày đến hạn: {formatDate(t.dueDate)}</div>}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </td>
+                                    </tr>
+                                    
+                                    {/* Level 6: SubDetails */}
+                                    {expandedGroups.has(detail.id) && detail.subDetails?.map((subDetail: any) => (
+                                      <tr key={subDetail.id} className="table__row" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
+                                        <td className="table__cell" style={{ textAlign: 'center', width: '50px' }}></td>
+                                        <td className="table__cell">{subDetail.code}</td>
+                                        <td className="table__cell">{subDetail.name}</td>
+                                        <td className="table__cell">{formatDate(subDetail.departments[0]?.startDate)}</td>
+                                        <td className="table__cell">{formatDate(subDetail.departments[0]?.endDate)}</td>
+                                        <td className="table__cell">
+                                          <ProgressBar value={subDetail.departments[0]?.progress || 0} showLabel />
+                                        </td>
+                                        <td className="table__cell">
+                                          {tasks.filter(t => t.kpiItemId === subDetail.id).length > 0 && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                              {tasks.filter(t => t.kpiItemId === subDetail.id).map(t => (
+                                                <div key={t.id} style={{ fontSize: '0.75rem', padding: '4px 6px', backgroundColor: statusColors[t.status], color: 'white', borderRadius: '4px' }}>
+                                                  <div>{t.title} ({t.progress}%)</div>
+                                                  {t.dueDate && <div style={{ fontSize: '0.65rem', opacity: 0.9 }}>Ngày đến hạn: {formatDate(t.dueDate)}</div>}
+                                                </div>
+                                              ))}
                                             </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </td>
-                                  </tr>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </React.Fragment>
                                 ))}
                               </React.Fragment>
                             ))}
