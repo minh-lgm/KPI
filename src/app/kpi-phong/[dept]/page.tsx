@@ -364,7 +364,9 @@ export default function KPIPhongPage() {
       description: task.description,
       assignee: task.assignee,
       status: task.status,
-      progress: task.progress
+      progress: task.progress,
+      startDate: task.startDate,
+      dueDate: task.dueDate
     });
   };
 
@@ -981,7 +983,31 @@ export default function KPIPhongPage() {
                           <ProgressBar value={task.progress} showLabel />
                         )}
                       </td>
-                      <td className="table__cell">{formatDate(task.dueDate)}</td>
+                      <td className="table__cell">
+                        {editingTask === task.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <input
+                              type="date"
+                              value={editingTaskData.startDate ?? task.startDate ?? ''}
+                              onChange={(e) => setEditingTaskData({ ...editingTaskData, startDate: e.target.value })}
+                              style={{ padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.75rem' }}
+                              title="Ngày bắt đầu"
+                            />
+                            <input
+                              type="date"
+                              value={editingTaskData.dueDate ?? task.dueDate ?? ''}
+                              onChange={(e) => setEditingTaskData({ ...editingTaskData, dueDate: e.target.value })}
+                              style={{ padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.75rem' }}
+                              title="Hạn hoàn thành"
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            {task.startDate && <div style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>{formatDate(task.startDate)}</div>}
+                            <div>{formatDate(task.dueDate)}</div>
+                          </div>
+                        )}
+                      </td>
                       <td className="table__cell">
                         {isAuthenticated && (
                           <div style={{ display: 'flex', gap: '0.5rem' }}>
