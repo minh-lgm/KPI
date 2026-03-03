@@ -359,6 +359,7 @@ export default function KPIPhongPage() {
     setEditingTask(task.id);
     setEditingTaskData({
       title: task.title,
+      description: task.description,
       assignee: task.assignee,
       status: task.status,
       progress: task.progress
@@ -887,12 +888,21 @@ export default function KPIPhongPage() {
                           )}
                           <td className="table__cell">
                             {editingTask === task.id ? (
-                              <input
-                                type="text"
-                                value={editingTaskData.title ?? task.title}
-                                onChange={(e) => setEditingTaskData({ ...editingTaskData, title: e.target.value })}
-                                style={{ width: '100%', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', fontWeight: 500 }}
-                              />
+                              <div>
+                                <input
+                                  type="text"
+                                  value={editingTaskData.title ?? task.title}
+                                  onChange={(e) => setEditingTaskData({ ...editingTaskData, title: e.target.value })}
+                                  style={{ width: '100%', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', fontWeight: 500, marginBottom: '4px' }}
+                                  placeholder="Tiêu đề"
+                                />
+                                <textarea
+                                  value={editingTaskData.description ?? task.description ?? ''}
+                                  onChange={(e) => setEditingTaskData({ ...editingTaskData, description: e.target.value })}
+                                  style={{ width: '100%', padding: '4px', borderRadius: '4px', border: '1px solid var(--color-border)', fontSize: '0.75rem', minHeight: '50px', resize: 'vertical' }}
+                                  placeholder="Mô tả"
+                                />
+                              </div>
                             ) : (
                               <>
                                 <div style={{ fontWeight: 500 }}>{task.title}</div>
