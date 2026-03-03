@@ -21,6 +21,12 @@ interface Task {
 }
 
 const statusColors: Record<string, string> = {
+  pending: '#fef3c7',
+  in_progress: '#dbeafe',
+  completed: '#d1fae5'
+};
+
+const statusBorderColors: Record<string, string> = {
   pending: '#f59e0b',
   in_progress: '#3b82f6',
   completed: '#10b981'
@@ -342,16 +348,15 @@ export default function SchedulePage() {
                           fontSize: '0.7rem',
                           padding: '4px 6px',
                           borderRadius: '4px',
-                          backgroundColor: statusColors[task.status],
-                          color: 'white',
+                          backgroundColor: statusBorderColors[task.status],
+                          color: '#000',
                           cursor: 'pointer',
-                          overflow: 'hidden',
-                          borderLeft: `3px solid ${departmentColors[task.department] || '#666'}`
+                          overflow: 'hidden'
                         }}
                         title={`${task.title} - ${task.department}`}
                       >
                         <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#000' }}>{task.title}</div>
-                        <div style={{ opacity: 0.85, marginTop: '2px', fontSize: '0.65rem' }}>
+                        <div style={{ marginTop: '2px', fontSize: '0.65rem', color: '#555' }}>
                           {task.department} • {task.progress}%
                         </div>
                       </div>
@@ -380,7 +385,7 @@ export default function SchedulePage() {
                   marginRight: '1rem',
                   padding: '4px 8px',
                   borderRadius: '4px',
-                  backgroundColor: statusColors[key],
+                  backgroundColor: statusBorderColors[key],
                   color: 'white',
                   fontSize: '0.75rem'
                 }}>
@@ -466,7 +471,7 @@ export default function SchedulePage() {
                       <span style={{ 
                         padding: '4px 8px', 
                         borderRadius: '4px', 
-                        backgroundColor: statusColors[selectedTask.status],
+                        backgroundColor: statusBorderColors[selectedTask.status],
                         color: 'white'
                       }}>
                         {statusLabels[selectedTask.status]}
