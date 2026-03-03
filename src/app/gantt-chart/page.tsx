@@ -420,31 +420,66 @@ export default function GanttChartPage() {
               <button onClick={() => setSelectedTask(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
             </div>
             <div className="card__body">
-              {(() => {
-                const path = kpiPaths[selectedTask.kpiItemId];
-                return (
-                  <table style={{ width: '100%' }}>
-                    <tbody>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0', width: '130px' }}>Tiêu đề:</td><td>{selectedTask.title}</td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Mô tả:</td><td>{selectedTask.description || '-'}</td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Phòng ban:</td><td><span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: departmentColors[selectedTask.department] || '#666', color: 'white' }}>{selectedTask.department}</span></td></tr>
-                      {path && path.map((seg, i) => (
-                        <tr key={i}><td style={{ fontWeight: 600, padding: '6px 0', fontSize: '0.85rem' }}>{seg.level === 'group' ? 'Nhóm' : seg.level === 'subGroup' ? 'Phân nhóm' : `Level ${i + 1}`}:</td><td><span style={{ color: levelColors[seg.level], fontWeight: 500 }}>{seg.code}</span> - {seg.name}</td></tr>
-                      ))}
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Người thực hiện:</td><td>{selectedTask.assignee || 'Chưa phân công'}</td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Trạng thái:</td><td><span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: statusColors[selectedTask.status], color: 'white' }}>{statusLabels[selectedTask.status]}</span></td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Tiến độ:</td><td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <div style={{ flex: 1, height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}><div style={{ width: `${selectedTask.progress}%`, height: '100%', backgroundColor: statusColors[selectedTask.status], borderRadius: '4px' }}></div></div>
-                          <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{selectedTask.progress}%</span>
-                        </div>
-                      </td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Ngày bắt đầu:</td><td>{fmt(selectedTask.startDate)}</td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Deadline:</td><td style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{fmt(selectedTask.dueDate)}</td></tr>
-                    </tbody>
-                  </table>
-                );
-              })()}
+              <table style={{ width: '100%' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0', width: '120px' }}>Tiêu đề:</td>
+                    <td>{selectedTask.title}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Mô tả:</td>
+                    <td>{selectedTask.description || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Phòng ban:</td>
+                    <td>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: departmentColors[selectedTask.department] || '#666',
+                        color: 'white'
+                      }}>
+                        {selectedTask.department}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Mã KPI:</td>
+                    <td>{selectedTask.kpiCode}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Tên KPI:</td>
+                    <td>{kpiPaths[selectedTask.kpiItemId]?.slice(-1)[0]?.name || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Người thực hiện:</td>
+                    <td>{selectedTask.assignee || 'Chưa phân công'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Trạng thái:</td>
+                    <td>
+                      <span style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '4px', 
+                        backgroundColor: statusColors[selectedTask.status],
+                        color: 'white'
+                      }}>
+                        {statusLabels[selectedTask.status]}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Tiến độ:</td>
+                    <td>{selectedTask.progress}%</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Deadline:</td>
+                    <td style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
+                      {fmt(selectedTask.dueDate)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
