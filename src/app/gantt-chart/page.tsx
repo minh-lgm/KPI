@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import Layout from '@/components/Layout';
 
@@ -21,6 +21,21 @@ interface Task {
   updatedAt: string;
 }
 
+interface KpiHierarchyInfo {
+  groupCode: string;
+  groupName: string;
+  subGroupCode: string;
+  subGroupName: string;
+  kpiCode: string;
+  kpiName: string;
+}
+
+type GanttRow =
+  | { type: 'group'; key: string; code: string; name: string; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
+  | { type: 'subgroup'; key: string; code: string; name: string; groupKey: string; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
+  | { type: 'kpi'; key: string; code: string; name: string; groupKey: string; subGroupKey: string; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
+  | { type: 'task'; key: string; task: Task; groupKey: string; subGroupKey: string; kpiKey: string };
+
 const statusColors: Record<string, string> = {
   pending: '#f59e0b',
   in_progress: '#3b82f6',
@@ -40,18 +55,21 @@ const departmentColors: Record<string, string> = {
   'P.PDTD': '#f97316'
 };
 
+const groupBgColors = ['#eef2ff', '#ecfdf5', '#fefce8', '#fff1f2', '#f0f9ff', '#faf5ff'];
+
 export default function GanttChartPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterDept, setFilterDept] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [kpiNameMap, setKpiNameMap] = useState<Record<string, string>>({});
+  const [kpiHierarchy, setKpiHierarchy] = useState<Record<string, KpiHierarchyInfo>>({});
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchTasks();
-    fetchKpiNames();
+    fetchKpiHierarchy();
   }, []);
 
   const fetchTasks = async () => {
@@ -69,35 +87,49 @@ export default function GanttChartPage() {
     }
   };
 
-  const fetchKpiNames = async () => {
+  const fetchKpiHierarchy = async () => {
     try {
       const res = await fetch('/api/kpi');
       if (!res.ok) return;
       const data = await res.json();
-      const map: Record<string, string> = {};
+      const map: Record<string, KpiHierarchyInfo> = {};
       for (const group of data.groups || []) {
         for (const sub of group.subGroups || []) {
+          const process = (node: any, code: string, name: string) => {
+            map[node.id] = {
+              groupCode: group.code, groupName: group.name,
+              subGroupCode: sub.fullCode || sub.code, subGroupName: sub.name,
+              kpiCode: code, kpiName: name
+            };
+          };
           for (const item of sub.items || []) {
-            map[item.id] = item.name;
+            process(item, item.code, item.name);
             for (const si of item.subItems || []) {
-              map[si.id] = si.name;
+              process(si, si.code, si.name);
               for (const d of si.details || []) {
-                map[d.id] = d.name;
+                process(d, d.code, d.name);
                 for (const sd of d.subDetails || []) {
-                  map[sd.id] = sd.name;
+                  process(sd, sd.code, sd.name);
                 }
               }
             }
           }
         }
       }
-      setKpiNameMap(map);
+      setKpiHierarchy(map);
     } catch (err) {
-      console.error('Error fetching KPI names:', err);
+      console.error('Error fetching KPI hierarchy:', err);
     }
   };
 
-  // Filter tasks
+  const toggle = (key: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const departments = Array.from(new Set(tasks.map(t => t.department))).sort();
   const filteredTasks = tasks.filter(t => {
     if (filterDept && t.department !== filterDept) return false;
@@ -105,91 +137,112 @@ export default function GanttChartPage() {
     return true;
   });
 
-  // Sort tasks by startDate then dueDate
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    const aStart = a.startDate || a.dueDate || a.createdAt;
-    const bStart = b.startDate || b.dueDate || b.createdAt;
-    return aStart.localeCompare(bStart);
-  });
+  const getAgg = (list: Task[]) => {
+    const avg = list.length > 0 ? Math.round(list.reduce((s, t) => s + t.progress, 0) / list.length) : 0;
+    let minS = '', maxE = '';
+    for (const t of list) {
+      const s = t.startDate || t.dueDate;
+      const e = t.dueDate || t.startDate;
+      if (s && (!minS || s < minS)) minS = s;
+      if (e && (!maxE || e > maxE)) maxE = e;
+    }
+    return { avg, minS, maxE };
+  };
 
-  // Calculate date range for chart
-  const getDateRange = () => {
-    if (sortedTasks.length === 0) return { start: new Date(), end: new Date(), days: 30 };
-    
-    let minDate = new Date();
-    let maxDate = new Date();
-    let first = true;
+  const ganttRows = useMemo(() => {
+    const rows: GanttRow[] = [];
+    const grouped: Record<string, Record<string, Record<string, Task[]>>> = {};
 
-    for (const task of sortedTasks) {
-      const start = task.startDate ? new Date(task.startDate) : (task.dueDate ? new Date(task.dueDate) : null);
-      const end = task.dueDate ? new Date(task.dueDate) : start;
-      if (!start || !end) continue;
-
-      if (first) {
-        minDate = new Date(start);
-        maxDate = new Date(end);
-        first = false;
-      } else {
-        if (start < minDate) minDate = new Date(start);
-        if (end > maxDate) maxDate = new Date(end);
-      }
+    for (const task of filteredTasks) {
+      const info = kpiHierarchy[task.kpiItemId];
+      const gKey = info ? info.groupCode : '_other';
+      const sgKey = info ? info.subGroupCode : '_other';
+      const kKey = info ? info.kpiCode : (task.kpiCode || '_na');
+      if (!grouped[gKey]) grouped[gKey] = {};
+      if (!grouped[gKey][sgKey]) grouped[gKey][sgKey] = {};
+      if (!grouped[gKey][sgKey][kKey]) grouped[gKey][sgKey][kKey] = [];
+      grouped[gKey][sgKey][kKey].push(task);
     }
 
-    // Add some padding
-    minDate.setDate(minDate.getDate() - 3);
-    maxDate.setDate(maxDate.getDate() + 3);
+    const sortedGKeys = Object.keys(grouped).sort();
+    for (const gKey of sortedGKeys) {
+      const subs = grouped[gKey];
+      const allGTasks = Object.values(subs).flatMap(sg => Object.values(sg).flat());
+      const gInfo = allGTasks[0] ? kpiHierarchy[allGTasks[0].kpiItemId] : null;
+      const gAgg = getAgg(allGTasks);
+      rows.push({ type: 'group', key: `g-${gKey}`, code: gKey, name: gInfo?.groupName || 'Chưa phân loại', taskCount: allGTasks.length, avgProgress: gAgg.avg, minStart: gAgg.minS, maxEnd: gAgg.maxE });
 
-    const days = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    return { start: minDate, end: maxDate, days: Math.max(days, 14) };
+      if (collapsed.has(`g-${gKey}`)) continue;
+
+      for (const sgKey of Object.keys(subs).sort()) {
+        const kpis = subs[sgKey];
+        const allSgTasks = Object.values(kpis).flat();
+        const sgInfo = allSgTasks[0] ? kpiHierarchy[allSgTasks[0].kpiItemId] : null;
+        const sgAgg = getAgg(allSgTasks);
+        rows.push({ type: 'subgroup', key: `sg-${sgKey}`, code: sgKey, name: sgInfo?.subGroupName || sgKey, groupKey: `g-${gKey}`, taskCount: allSgTasks.length, avgProgress: sgAgg.avg, minStart: sgAgg.minS, maxEnd: sgAgg.maxE });
+
+        if (collapsed.has(`sg-${sgKey}`)) continue;
+
+        for (const kKey of Object.keys(kpis).sort()) {
+          const kTasks = kpis[kKey];
+          const kInfo = kTasks[0] ? kpiHierarchy[kTasks[0].kpiItemId] : null;
+          const kAgg = getAgg(kTasks);
+          rows.push({ type: 'kpi', key: `k-${kKey}`, code: kKey, name: kInfo?.kpiName || kKey, groupKey: `g-${gKey}`, subGroupKey: `sg-${sgKey}`, taskCount: kTasks.length, avgProgress: kAgg.avg, minStart: kAgg.minS, maxEnd: kAgg.maxE });
+
+          if (collapsed.has(`k-${kKey}`)) continue;
+
+          const sorted = [...kTasks].sort((a, b) => (a.startDate || a.dueDate || '').localeCompare(b.startDate || b.dueDate || ''));
+          for (const task of sorted) {
+            rows.push({ type: 'task', key: `t-${task.id}`, task, groupKey: `g-${gKey}`, subGroupKey: `sg-${sgKey}`, kpiKey: `k-${kKey}` });
+          }
+        }
+      }
+    }
+    return rows;
+  }, [filteredTasks, kpiHierarchy, collapsed]);
+
+  // Date range
+  const getDateRange = () => {
+    if (filteredTasks.length === 0) return { start: new Date(), days: 30 };
+    let minD = new Date(), maxD = new Date(), first = true;
+    for (const t of filteredTasks) {
+      const s = t.startDate ? new Date(t.startDate) : (t.dueDate ? new Date(t.dueDate) : null);
+      const e = t.dueDate ? new Date(t.dueDate) : s;
+      if (!s || !e) continue;
+      if (first) { minD = new Date(s); maxD = new Date(e); first = false; }
+      else { if (s < minD) minD = new Date(s); if (e > maxD) maxD = new Date(e); }
+    }
+    minD.setDate(minD.getDate() - 3);
+    maxD.setDate(maxD.getDate() + 3);
+    const days = Math.ceil((maxD.getTime() - minD.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return { start: minD, days: Math.max(days, 14) };
   };
 
   const { start: rangeStart, days: totalDays } = getDateRange();
+  const getDayOffset = (ds: string) => Math.ceil((new Date(ds).getTime() - rangeStart.getTime()) / 86400000);
 
-  // Get day offset from rangeStart
-  const getDayOffset = (dateStr: string): number => {
-    const d = new Date(dateStr);
-    return Math.ceil((d.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  // Generate date headers
-  const getDateHeaders = () => {
-    const headers: { date: Date; label: string; isToday: boolean; isMonthStart: boolean; monthLabel: string }[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
+  const dateHeaders = useMemo(() => {
+    const h: { label: string; isToday: boolean; isMonthStart: boolean; monthLabel: string }[] = [];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     for (let i = 0; i < totalDays; i++) {
-      const d = new Date(rangeStart);
-      d.setDate(d.getDate() + i);
-      headers.push({
-        date: d,
-        label: d.getDate().toString(),
-        isToday: d.toDateString() === today.toDateString(),
-        isMonthStart: d.getDate() === 1,
-        monthLabel: d.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' })
-      });
+      const d = new Date(rangeStart); d.setDate(d.getDate() + i);
+      h.push({ label: d.getDate().toString(), isToday: d.toDateString() === today.toDateString(), isMonthStart: d.getDate() === 1, monthLabel: d.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' }) });
     }
-    return headers;
-  };
+    return h;
+  }, [rangeStart, totalDays]);
 
-  const dateHeaders = getDateHeaders();
-  const DAY_WIDTH = 36;
-  const ROW_HEIGHT = 40;
-  const LABEL_WIDTH = 320;
+  const DAY_W = 36;
+  const ROW_H = 36;
+  const HDR_ROW_H = 30;
+  const LABEL_W = 400;
+  const todayIdx = dateHeaders.findIndex(h => h.isToday);
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('vi-VN');
-  };
+  const fmt = (ds: string) => ds ? new Date(ds).toLocaleDateString('vi-VN') : '-';
+
+  const getRowHeight = (row: GanttRow) => row.type === 'task' ? ROW_H : HDR_ROW_H;
 
   if (loading) {
-    return (
-      <Layout>
-        <div className="page-header">
-          <h1 className="page-header__title">Gantt Chart</h1>
-          <p className="page-header__subtitle">Đang tải...</p>
-        </div>
-      </Layout>
-    );
+    return (<Layout><div className="page-header"><h1 className="page-header__title">Gantt Chart</h1><p className="page-header__subtitle">Đang tải...</p></div></Layout>);
   }
 
   return (
@@ -197,237 +250,158 @@ export default function GanttChartPage() {
     <div>
       <div className="page-header">
         <h1 className="page-header__title">Gantt Chart</h1>
-        <p className="page-header__subtitle">
-          Biểu đồ tiến độ công việc - Tổng: <strong>{sortedTasks.length}</strong> tasks
-        </p>
+        <p className="page-header__subtitle">Biểu đồ tiến độ công việc theo KPI - Tổng: <strong>{filteredTasks.length}</strong> tasks</p>
       </div>
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <div className="card__body" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value)}
-            style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '0.85rem' }}
-          >
+          <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)} style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '0.85rem' }}>
             <option value="">Tất cả phòng ban</option>
-            {departments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
+            {departments.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '0.85rem' }}
-          >
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '0.85rem' }}>
             <option value="">Tất cả trạng thái</option>
-            {Object.entries(statusLabels).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
+            {Object.entries(statusLabels).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
-          {/* Legend */}
           <div style={{ display: 'flex', gap: '0.75rem', marginLeft: 'auto', flexWrap: 'wrap' }}>
-            {Object.entries(statusLabels).map(([key, label]) => (
-              <span key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
-                <span style={{ width: '12px', height: '12px', borderRadius: '2px', backgroundColor: statusColors[key], display: 'inline-block' }}></span>
-                {label}
+            {Object.entries(statusLabels).map(([k, l]) => (
+              <span key={k} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+                <span style={{ width: '12px', height: '12px', borderRadius: '2px', backgroundColor: statusColors[k], display: 'inline-block' }}></span>{l}
               </span>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Gantt Chart */}
-      {sortedTasks.length === 0 ? (
-        <div className="card">
-          <div className="card__body" style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-secondary)' }}>
-            Không có task nào để hiển thị
-          </div>
-        </div>
+      {/* Gantt */}
+      {ganttRows.length === 0 ? (
+        <div className="card"><div className="card__body" style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-secondary)' }}>Không có task nào</div></div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ display: 'flex', overflow: 'auto' }} ref={chartRef}>
-            {/* Left side: Task labels */}
-            <div style={{ 
-              minWidth: `${LABEL_WIDTH}px`, 
-              maxWidth: `${LABEL_WIDTH}px`, 
-              borderRight: '2px solid var(--color-border)',
-              position: 'sticky',
-              left: 0,
-              zIndex: 10,
-              backgroundColor: 'white'
-            }}>
-              {/* Header */}
-              <div style={{ 
-                height: '52px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                padding: '0 0.75rem', 
-                borderBottom: '1px solid var(--color-border)', 
-                fontWeight: 600,
-                backgroundColor: 'var(--color-primary)',
-                color: 'white'
-              }}>
-                Task
+            {/* Left labels */}
+            <div style={{ minWidth: `${LABEL_W}px`, maxWidth: `${LABEL_W}px`, borderRight: '2px solid var(--color-border)', position: 'sticky', left: 0, zIndex: 10, backgroundColor: 'var(--color-bg)' }}>
+              <div style={{ height: '52px', display: 'flex', alignItems: 'center', padding: '0 0.75rem', borderBottom: '1px solid var(--color-border)', fontWeight: 600, backgroundColor: 'var(--color-primary)', color: 'white' }}>
+                KPI / Task
               </div>
-              {/* Task rows */}
-              {sortedTasks.map((task) => (
-                <div 
-                  key={task.id}
-                  onClick={() => setSelectedTask(task)}
-                  style={{ 
-                    height: `${ROW_HEIGHT}px`, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    padding: '0 0.75rem', 
-                    borderBottom: '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                    gap: '0.5rem'
-                  }}
-                  title={`${task.title} - ${task.department}`}
-                >
-                  <span style={{
-                    width: '4px',
-                    height: '24px',
-                    borderRadius: '2px',
-                    backgroundColor: departmentColors[task.department] || '#666',
-                    flexShrink: 0
-                  }}></span>
-                  <div style={{ overflow: 'hidden', flex: 1 }}>
-                    <div style={{ 
-                      fontSize: '0.75rem', 
-                      fontWeight: 500, 
-                      whiteSpace: 'nowrap', 
-                      overflow: 'hidden', 
-                      textOverflow: 'ellipsis' 
-                    }}>
-                      {task.title}
+              {ganttRows.map((row, idx) => {
+                if (row.type === 'group') {
+                  const isOpen = !collapsed.has(row.key);
+                  return (
+                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', backgroundColor: groupBgColors[idx % groupBgColors.length], fontWeight: 700, fontSize: '0.8rem', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.7rem', width: '16px' }}>{isOpen ? '▼' : '▶'}</span>
+                      <span style={{ color: 'var(--color-primary)' }}>{row.code}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} tasks • {row.avgProgress}%</span>
                     </div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)' }}>
-                      {task.department} • {task.assignee || 'N/A'}
+                  );
+                }
+                if (row.type === 'subgroup') {
+                  const isOpen = !collapsed.has(row.key);
+                  return (
+                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem 0 1.5rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', backgroundColor: '#f8fafc', fontWeight: 600, fontSize: '0.75rem', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.65rem', width: '16px' }}>{isOpen ? '▼' : '▶'}</span>
+                      <span style={{ color: '#6366f1' }}>{row.code}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} • {row.avgProgress}%</span>
+                    </div>
+                  );
+                }
+                if (row.type === 'kpi') {
+                  const isOpen = !collapsed.has(row.key);
+                  return (
+                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem 0 2.75rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.7rem', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.6rem', width: '14px' }}>{isOpen ? '▼' : '▶'}</span>
+                      <span style={{ fontWeight: 600, color: '#0891b2' }}>{row.code}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>{row.name}</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} • {row.avgProgress}%</span>
+                    </div>
+                  );
+                }
+                // task
+                const t = row.task;
+                return (
+                  <div key={row.key} onClick={() => setSelectedTask(t)} style={{ height: `${ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem 0 3.75rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', gap: '0.4rem' }} title={`${t.title} - ${t.department}`}>
+                    <span style={{ width: '4px', height: '20px', borderRadius: '2px', backgroundColor: departmentColors[t.department] || '#666', flexShrink: 0 }}></span>
+                    <div style={{ overflow: 'hidden', flex: 1 }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
+                      <div style={{ fontSize: '0.6rem', color: 'var(--color-text-secondary)' }}>{t.department} • {t.assignee || 'N/A'}</div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* Right side: Chart area */}
-            <div style={{ flex: 1, minWidth: `${totalDays * DAY_WIDTH}px` }}>
+            {/* Right chart */}
+            <div style={{ flex: 1, minWidth: `${totalDays * DAY_W}px` }}>
               {/* Date headers */}
-              <div style={{ 
-                display: 'flex', 
-                height: '52px', 
-                borderBottom: '1px solid var(--color-border)',
-                backgroundColor: 'var(--color-primary)',
-                color: 'white'
-              }}>
+              <div style={{ display: 'flex', height: '52px', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-primary)', color: 'white' }}>
                 {dateHeaders.map((h, i) => (
-                  <div 
-                    key={i} 
-                    style={{ 
-                      width: `${DAY_WIDTH}px`, 
-                      minWidth: `${DAY_WIDTH}px`,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRight: '1px solid rgba(255,255,255,0.15)',
-                      fontSize: '0.7rem',
-                      backgroundColor: h.isToday ? 'rgba(255,255,255,0.2)' : 'transparent',
-                      position: 'relative'
-                    }}
-                  >
-                    {(h.isMonthStart || i === 0) && (
-                      <div style={{ fontSize: '0.6rem', opacity: 0.8, position: 'absolute', top: '2px' }}>
-                        {h.monthLabel}
-                      </div>
-                    )}
-                    <div style={{ marginTop: h.isMonthStart || i === 0 ? '10px' : '0', fontWeight: h.isToday ? 700 : 400 }}>
-                      {h.label}
-                    </div>
+                  <div key={i} style={{ width: `${DAY_W}px`, minWidth: `${DAY_W}px`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid rgba(255,255,255,0.15)', fontSize: '0.7rem', backgroundColor: h.isToday ? 'rgba(255,255,255,0.2)' : 'transparent', position: 'relative' }}>
+                    {(h.isMonthStart || i === 0) && <div style={{ fontSize: '0.6rem', opacity: 0.8, position: 'absolute', top: '2px' }}>{h.monthLabel}</div>}
+                    <div style={{ marginTop: (h.isMonthStart || i === 0) ? '10px' : '0', fontWeight: h.isToday ? 700 : 400 }}>{h.label}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Task bars */}
-              {sortedTasks.map((task) => {
-                const taskStart = task.startDate || task.dueDate || task.createdAt?.split('T')[0];
-                const taskEnd = task.dueDate || taskStart;
-                if (!taskStart) return <div key={task.id} style={{ height: `${ROW_HEIGHT}px`, borderBottom: '1px solid var(--color-border)' }}></div>;
+              {/* Rows */}
+              {ganttRows.map((row) => {
+                const rh = getRowHeight(row);
 
-                const startOffset = getDayOffset(taskStart);
-                const endOffset = getDayOffset(taskEnd);
-                const barLength = Math.max(endOffset - startOffset + 1, 1);
-                const progressWidth = (task.progress / 100) * barLength * DAY_WIDTH;
+                if (row.type === 'group') {
+                  const so = row.minStart ? getDayOffset(row.minStart) : 0;
+                  const eo = row.maxEnd ? getDayOffset(row.maxEnd) : so;
+                  const len = Math.max(eo - so + 1, 1);
+                  return (
+                    <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)', backgroundColor: '#f1f5f9' }}>
+                      {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
+                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: '10px', width: `${len * DAY_W}px`, height: '10px', backgroundColor: 'var(--color-primary)', borderRadius: '5px', opacity: 0.3 }}></div>}
+                    </div>
+                  );
+                }
+
+                if (row.type === 'subgroup') {
+                  const so = row.minStart ? getDayOffset(row.minStart) : 0;
+                  const eo = row.maxEnd ? getDayOffset(row.maxEnd) : so;
+                  const len = Math.max(eo - so + 1, 1);
+                  return (
+                    <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)', backgroundColor: '#f8fafc' }}>
+                      {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
+                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: '11px', width: `${len * DAY_W}px`, height: '8px', backgroundColor: '#6366f1', borderRadius: '4px', opacity: 0.25 }}></div>}
+                    </div>
+                  );
+                }
+
+                if (row.type === 'kpi') {
+                  const so = row.minStart ? getDayOffset(row.minStart) : 0;
+                  const eo = row.maxEnd ? getDayOffset(row.maxEnd) : so;
+                  const len = Math.max(eo - so + 1, 1);
+                  return (
+                    <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)' }}>
+                      {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
+                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: '12px', width: `${len * DAY_W}px`, height: '6px', backgroundColor: '#0891b2', borderRadius: '3px', opacity: 0.2 }}></div>}
+                    </div>
+                  );
+                }
+
+                // Task bar
+                const t = row.task;
+                const tStart = t.startDate || t.dueDate || t.createdAt?.split('T')[0];
+                const tEnd = t.dueDate || tStart;
+                if (!tStart) return <div key={row.key} style={{ height: `${rh}px`, borderBottom: '1px solid var(--color-border)' }}></div>;
+
+                const so = getDayOffset(tStart);
+                const eo = getDayOffset(tEnd);
+                const len = Math.max(eo - so + 1, 1);
+                const pw = (t.progress / 100) * len * DAY_W;
 
                 return (
-                  <div 
-                    key={task.id} 
-                    style={{ 
-                      height: `${ROW_HEIGHT}px`, 
-                      position: 'relative', 
-                      borderBottom: '1px solid var(--color-border)'
-                    }}
-                  >
-                    {/* Today line */}
-                    {dateHeaders.map((h, i) => h.isToday ? (
-                      <div key={`today-${i}`} style={{
-                        position: 'absolute',
-                        left: `${i * DAY_WIDTH + DAY_WIDTH / 2}px`,
-                        top: 0,
-                        bottom: 0,
-                        width: '2px',
-                        backgroundColor: '#ef4444',
-                        zIndex: 1,
-                        opacity: 0.5
-                      }}></div>
-                    ) : null)}
-
-                    {/* Task bar */}
-                    <div
-                      onClick={() => setSelectedTask(task)}
-                      style={{
-                        position: 'absolute',
-                        left: `${startOffset * DAY_WIDTH + 2}px`,
-                        top: '8px',
-                        width: `${barLength * DAY_WIDTH - 4}px`,
-                        height: `${ROW_HEIGHT - 16}px`,
-                        backgroundColor: statusColors[task.status],
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        overflow: 'hidden',
-                        opacity: 0.9,
-                        zIndex: 2
-                      }}
-                      title={`${task.title}: ${formatDate(taskStart)} → ${formatDate(taskEnd)} (${task.progress}%)`}
-                    >
-                      {/* Progress fill */}
-                      <div style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        width: `${progressWidth}px`,
-                        backgroundColor: 'rgba(0,0,0,0.15)',
-                        borderRadius: '4px 0 0 4px'
-                      }}></div>
-                      {barLength * DAY_WIDTH > 50 && (
-                        <span style={{ 
-                          position: 'relative', 
-                          zIndex: 1, 
-                          fontSize: '0.65rem', 
-                          color: 'white', 
-                          fontWeight: 600, 
-                          padding: '0 6px',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {task.progress}%
-                        </span>
-                      )}
+                  <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)' }}>
+                    {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
+                    <div onClick={() => setSelectedTask(t)} style={{ position: 'absolute', left: `${so * DAY_W + 2}px`, top: '6px', width: `${len * DAY_W - 4}px`, height: `${rh - 12}px`, backgroundColor: statusColors[t.status], borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', overflow: 'hidden', opacity: 0.9, zIndex: 2 }} title={`${t.title}: ${fmt(tStart)} → ${fmt(tEnd)} (${t.progress}%)`}>
+                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pw}px`, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: '4px 0 0 4px' }}></div>
+                      {len * DAY_W > 50 && <span style={{ position: 'relative', zIndex: 1, fontSize: '0.6rem', color: 'white', fontWeight: 600, padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.progress}%</span>}
                     </div>
                   </div>
                 );
@@ -437,114 +411,40 @@ export default function GanttChartPage() {
         </div>
       )}
 
-      {/* Task Detail Modal */}
+      {/* Modal */}
       {selectedTask && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}
-          onClick={() => setSelectedTask(null)}
-        >
-          <div 
-            className="card"
-            style={{ 
-              width: '90%', 
-              maxWidth: '500px',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}
-            onClick={e => e.stopPropagation()}
-          >
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setSelectedTask(null)}>
+          <div className="card" style={{ width: '90%', maxWidth: '500px', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="card__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Chi tiết Task</h3>
-              <button 
-                onClick={() => setSelectedTask(null)}
-                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}
-              >
-                ×
-              </button>
+              <button onClick={() => setSelectedTask(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
             </div>
             <div className="card__body">
-              <table style={{ width: '100%' }}>
-                <tbody>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0', width: '130px' }}>Tiêu đề:</td>
-                    <td>{selectedTask.title}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Mô tả:</td>
-                    <td>{selectedTask.description || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Phòng ban:</td>
-                    <td>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: departmentColors[selectedTask.department] || '#666',
-                        color: 'white'
-                      }}>
-                        {selectedTask.department}
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Mã KPI:</td>
-                    <td>{selectedTask.kpiCode}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Tên KPI:</td>
-                    <td>{kpiNameMap[selectedTask.kpiItemId] || '-'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Người thực hiện:</td>
-                    <td>{selectedTask.assignee || 'Chưa phân công'}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Trạng thái:</td>
-                    <td>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: statusColors[selectedTask.status],
-                        color: 'white'
-                      }}>
-                        {statusLabels[selectedTask.status]}
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Tiến độ:</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ flex: 1, height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-                          <div style={{ width: `${selectedTask.progress}%`, height: '100%', backgroundColor: statusColors[selectedTask.status], borderRadius: '4px' }}></div>
+              {(() => {
+                const info = kpiHierarchy[selectedTask.kpiItemId];
+                return (
+                  <table style={{ width: '100%' }}>
+                    <tbody>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0', width: '130px' }}>Tiêu đề:</td><td>{selectedTask.title}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Mô tả:</td><td>{selectedTask.description || '-'}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Phòng ban:</td><td><span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: departmentColors[selectedTask.department] || '#666', color: 'white' }}>{selectedTask.department}</span></td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Nhóm KPI:</td><td>{info ? `${info.groupCode} - ${info.groupName}` : '-'}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Mã KPI:</td><td>{selectedTask.kpiCode}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Tên KPI:</td><td>{info?.kpiName || '-'}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Người thực hiện:</td><td>{selectedTask.assignee || 'Chưa phân công'}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Trạng thái:</td><td><span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: statusColors[selectedTask.status], color: 'white' }}>{statusLabels[selectedTask.status]}</span></td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Tiến độ:</td><td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ flex: 1, height: '8px', backgroundColor: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}><div style={{ width: `${selectedTask.progress}%`, height: '100%', backgroundColor: statusColors[selectedTask.status], borderRadius: '4px' }}></div></div>
+                          <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{selectedTask.progress}%</span>
                         </div>
-                        <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{selectedTask.progress}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Ngày bắt đầu:</td>
-                    <td>{formatDate(selectedTask.startDate)}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Deadline:</td>
-                    <td style={{ color: 'var(--color-danger)', fontWeight: 600 }}>
-                      {formatDate(selectedTask.dueDate)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      </td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Ngày bắt đầu:</td><td>{fmt(selectedTask.startDate)}</td></tr>
+                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Deadline:</td><td style={{ color: 'var(--color-danger)', fontWeight: 600 }}>{fmt(selectedTask.dueDate)}</td></tr>
+                    </tbody>
+                  </table>
+                );
+              })()}
             </div>
           </div>
         </div>
