@@ -21,20 +21,15 @@ interface Task {
   updatedAt: string;
 }
 
-interface KpiHierarchyInfo {
-  groupCode: string;
-  groupName: string;
-  subGroupCode: string;
-  subGroupName: string;
-  kpiCode: string;
-  kpiName: string;
+interface PathSegment {
+  code: string;
+  name: string;
+  level: string; // group, subGroup, item, subItem, detail, subDetail
 }
 
 type GanttRow =
-  | { type: 'group'; key: string; code: string; name: string; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
-  | { type: 'subgroup'; key: string; code: string; name: string; groupKey: string; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
-  | { type: 'kpi'; key: string; code: string; name: string; groupKey: string; subGroupKey: string; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
-  | { type: 'task'; key: string; task: Task; groupKey: string; subGroupKey: string; kpiKey: string };
+  | { type: 'header'; key: string; code: string; name: string; level: string; depth: number; taskCount: number; avgProgress: number; minStart: string; maxEnd: string }
+  | { type: 'task'; key: string; task: Task; depth: number };
 
 const statusColors: Record<string, string> = {
   pending: '#f59e0b',
@@ -55,7 +50,23 @@ const departmentColors: Record<string, string> = {
   'P.PDTD': '#f97316'
 };
 
-const groupBgColors = ['#eef2ff', '#ecfdf5', '#fefce8', '#fff1f2', '#f0f9ff', '#faf5ff'];
+const levelColors: Record<string, string> = {
+  group: 'var(--color-primary)',
+  subGroup: '#6366f1',
+  item: '#0891b2',
+  subItem: '#0d9488',
+  detail: '#7c3aed',
+  subDetail: '#be185d'
+};
+
+const levelBgColors: Record<string, string> = {
+  group: '#eef2ff',
+  subGroup: '#f0f9ff',
+  item: '#ecfdf5',
+  subItem: '#f0fdfa',
+  detail: '#faf5ff',
+  subDetail: '#fff1f2'
+};
 
 export default function GanttChartPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -63,7 +74,7 @@ export default function GanttChartPage() {
   const [filterDept, setFilterDept] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [kpiHierarchy, setKpiHierarchy] = useState<Record<string, KpiHierarchyInfo>>({});
+  const [kpiPaths, setKpiPaths] = useState<Record<string, PathSegment[]>>({});
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -92,31 +103,31 @@ export default function GanttChartPage() {
       const res = await fetch('/api/kpi');
       if (!res.ok) return;
       const data = await res.json();
-      const map: Record<string, KpiHierarchyInfo> = {};
+      const map: Record<string, PathSegment[]> = {};
+
       for (const group of data.groups || []) {
+        const gSeg: PathSegment = { code: group.code, name: group.name, level: 'group' };
         for (const sub of group.subGroups || []) {
-          const process = (node: any, code: string, name: string) => {
-            map[node.id] = {
-              groupCode: group.code, groupName: group.name,
-              subGroupCode: sub.fullCode || sub.code, subGroupName: sub.name,
-              kpiCode: code, kpiName: name
-            };
-          };
+          const sgSeg: PathSegment = { code: sub.fullCode || sub.code, name: sub.name, level: 'subGroup' };
           for (const item of sub.items || []) {
-            process(item, item.code, item.name);
+            const iSeg: PathSegment = { code: item.code, name: item.name, level: 'item' };
+            map[item.id] = [gSeg, sgSeg, iSeg];
             for (const si of item.subItems || []) {
-              process(si, si.code, si.name);
+              const siSeg: PathSegment = { code: si.code, name: si.name, level: 'subItem' };
+              map[si.id] = [gSeg, sgSeg, iSeg, siSeg];
               for (const d of si.details || []) {
-                process(d, d.code, d.name);
+                const dSeg: PathSegment = { code: d.code, name: d.name, level: 'detail' };
+                map[d.id] = [gSeg, sgSeg, iSeg, siSeg, dSeg];
                 for (const sd of d.subDetails || []) {
-                  process(sd, sd.code, sd.name);
+                  const sdSeg: PathSegment = { code: sd.code, name: sd.name, level: 'subDetail' };
+                  map[sd.id] = [gSeg, sgSeg, iSeg, siSeg, dSeg, sdSeg];
                 }
               }
             }
           }
         }
       }
-      setKpiHierarchy(map);
+      setKpiPaths(map);
     } catch (err) {
       console.error('Error fetching KPI hierarchy:', err);
     }
@@ -149,57 +160,91 @@ export default function GanttChartPage() {
     return { avg, minS, maxE };
   };
 
+  // Build tree from tasks using their full paths, then flatten to rows
   const ganttRows = useMemo(() => {
-    const rows: GanttRow[] = [];
-    const grouped: Record<string, Record<string, Record<string, Task[]>>> = {};
+    interface TreeNode {
+      code: string;
+      name: string;
+      level: string;
+      children: Map<string, TreeNode>;
+      tasks: Task[];
+    }
+
+    const root: Map<string, TreeNode> = new Map();
+
+    const getOrCreate = (parent: Map<string, TreeNode>, seg: PathSegment): TreeNode => {
+      const key = `${seg.level}-${seg.code}`;
+      if (!parent.has(key)) {
+        parent.set(key, { code: seg.code, name: seg.name, level: seg.level, children: new Map(), tasks: [] });
+      }
+      return parent.get(key)!;
+    };
 
     for (const task of filteredTasks) {
-      const info = kpiHierarchy[task.kpiItemId];
-      const gKey = info ? info.groupCode : '_other';
-      const sgKey = info ? info.subGroupCode : '_other';
-      const kKey = info ? info.kpiCode : (task.kpiCode || '_na');
-      if (!grouped[gKey]) grouped[gKey] = {};
-      if (!grouped[gKey][sgKey]) grouped[gKey][sgKey] = {};
-      if (!grouped[gKey][sgKey][kKey]) grouped[gKey][sgKey][kKey] = [];
-      grouped[gKey][sgKey][kKey].push(task);
+      const path = kpiPaths[task.kpiItemId];
+      if (!path || path.length === 0) {
+        const node = getOrCreate(root, { code: '_other', name: 'Chưa phân loại', level: 'group' });
+        node.tasks.push(task);
+        continue;
+      }
+      let currentChildren = root;
+      let lastNode: TreeNode | null = null;
+      for (const seg of path) {
+        lastNode = getOrCreate(currentChildren, seg);
+        currentChildren = lastNode.children;
+      }
+      if (lastNode) lastNode.tasks.push(task);
     }
 
-    const sortedGKeys = Object.keys(grouped).sort();
-    for (const gKey of sortedGKeys) {
-      const subs = grouped[gKey];
-      const allGTasks = Object.values(subs).flatMap(sg => Object.values(sg).flat());
-      const gInfo = allGTasks[0] ? kpiHierarchy[allGTasks[0].kpiItemId] : null;
-      const gAgg = getAgg(allGTasks);
-      rows.push({ type: 'group', key: `g-${gKey}`, code: gKey, name: gInfo?.groupName || 'Chưa phân loại', taskCount: allGTasks.length, avgProgress: gAgg.avg, minStart: gAgg.minS, maxEnd: gAgg.maxE });
+    const getAllTasks = (node: TreeNode): Task[] => {
+      let all = [...node.tasks];
+      for (const child of node.children.values()) {
+        all = all.concat(getAllTasks(child));
+      }
+      return all;
+    };
 
-      if (collapsed.has(`g-${gKey}`)) continue;
+    const rows: GanttRow[] = [];
 
-      for (const sgKey of Object.keys(subs).sort()) {
-        const kpis = subs[sgKey];
-        const allSgTasks = Object.values(kpis).flat();
-        const sgInfo = allSgTasks[0] ? kpiHierarchy[allSgTasks[0].kpiItemId] : null;
-        const sgAgg = getAgg(allSgTasks);
-        rows.push({ type: 'subgroup', key: `sg-${sgKey}`, code: sgKey, name: sgInfo?.subGroupName || sgKey, groupKey: `g-${gKey}`, taskCount: allSgTasks.length, avgProgress: sgAgg.avg, minStart: sgAgg.minS, maxEnd: sgAgg.maxE });
+    const flatten = (nodes: Map<string, TreeNode>, depth: number) => {
+      const sorted = Array.from(nodes.values()).sort((a, b) => a.code.localeCompare(b.code));
+      for (const node of sorted) {
+        const allTasks = getAllTasks(node);
+        if (allTasks.length === 0) continue;
+        const agg = getAgg(allTasks);
+        const headerKey = `${node.level}-${node.code}`;
 
-        if (collapsed.has(`sg-${sgKey}`)) continue;
+        rows.push({
+          type: 'header',
+          key: headerKey,
+          code: node.code,
+          name: node.name,
+          level: node.level,
+          depth,
+          taskCount: allTasks.length,
+          avgProgress: agg.avg,
+          minStart: agg.minS,
+          maxEnd: agg.maxE
+        });
 
-        for (const kKey of Object.keys(kpis).sort()) {
-          const kTasks = kpis[kKey];
-          const kInfo = kTasks[0] ? kpiHierarchy[kTasks[0].kpiItemId] : null;
-          const kAgg = getAgg(kTasks);
-          rows.push({ type: 'kpi', key: `k-${kKey}`, code: kKey, name: kInfo?.kpiName || kKey, groupKey: `g-${gKey}`, subGroupKey: `sg-${sgKey}`, taskCount: kTasks.length, avgProgress: kAgg.avg, minStart: kAgg.minS, maxEnd: kAgg.maxE });
+        if (collapsed.has(headerKey)) continue;
 
-          if (collapsed.has(`k-${kKey}`)) continue;
+        // Recurse children first
+        if (node.children.size > 0) {
+          flatten(node.children, depth + 1);
+        }
 
-          const sorted = [...kTasks].sort((a, b) => (a.startDate || a.dueDate || '').localeCompare(b.startDate || b.dueDate || ''));
-          for (const task of sorted) {
-            rows.push({ type: 'task', key: `t-${task.id}`, task, groupKey: `g-${gKey}`, subGroupKey: `sg-${sgKey}`, kpiKey: `k-${kKey}` });
-          }
+        // Then direct tasks of this node
+        const sortedTasks = [...node.tasks].sort((a, b) => (a.startDate || a.dueDate || '').localeCompare(b.startDate || b.dueDate || ''));
+        for (const task of sortedTasks) {
+          rows.push({ type: 'task', key: `t-${task.id}`, task, depth: depth + 1 });
         }
       }
-    }
+    };
+
+    flatten(root, 0);
     return rows;
-  }, [filteredTasks, kpiHierarchy, collapsed]);
+  }, [filteredTasks, kpiPaths, collapsed]);
 
   // Date range
   const getDateRange = () => {
@@ -214,7 +259,7 @@ export default function GanttChartPage() {
     }
     minD.setDate(minD.getDate() - 3);
     maxD.setDate(maxD.getDate() + 3);
-    const days = Math.ceil((maxD.getTime() - minD.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const days = Math.ceil((maxD.getTime() - minD.getTime()) / 86400000) + 1;
     return { start: minD, days: Math.max(days, 14) };
   };
 
@@ -233,13 +278,11 @@ export default function GanttChartPage() {
 
   const DAY_W = 36;
   const ROW_H = 36;
-  const HDR_ROW_H = 30;
-  const LABEL_W = 400;
+  const HDR_H = 30;
+  const LABEL_W = 420;
   const todayIdx = dateHeaders.findIndex(h => h.isToday);
-
   const fmt = (ds: string) => ds ? new Date(ds).toLocaleDateString('vi-VN') : '-';
-
-  const getRowHeight = (row: GanttRow) => row.type === 'task' ? ROW_H : HDR_ROW_H;
+  const rh = (row: GanttRow) => row.type === 'task' ? ROW_H : HDR_H;
 
   if (loading) {
     return (<Layout><div className="page-header"><h1 className="page-header__title">Gantt Chart</h1><p className="page-header__subtitle">Đang tải...</p></div></Layout>);
@@ -250,7 +293,7 @@ export default function GanttChartPage() {
     <div>
       <div className="page-header">
         <h1 className="page-header__title">Gantt Chart</h1>
-        <p className="page-header__subtitle">Biểu đồ tiến độ công việc theo KPI - Tổng: <strong>{filteredTasks.length}</strong> tasks</p>
+        <p className="page-header__subtitle">Biểu đồ tiến độ theo KPI - Tổng: <strong>{filteredTasks.length}</strong> tasks</p>
       </div>
 
       {/* Filters */}
@@ -285,44 +328,26 @@ export default function GanttChartPage() {
               <div style={{ height: '52px', display: 'flex', alignItems: 'center', padding: '0 0.75rem', borderBottom: '1px solid var(--color-border)', fontWeight: 600, backgroundColor: 'var(--color-primary)', color: 'white' }}>
                 KPI / Task
               </div>
-              {ganttRows.map((row, idx) => {
-                if (row.type === 'group') {
+              {ganttRows.map((row) => {
+                if (row.type === 'header') {
                   const isOpen = !collapsed.has(row.key);
+                  const indent = row.depth * 20 + 8;
+                  const color = levelColors[row.level] || '#333';
+                  const bg = levelBgColors[row.level] || 'transparent';
+                  const isGroup = row.level === 'group';
                   return (
-                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', backgroundColor: groupBgColors[idx % groupBgColors.length], fontWeight: 700, fontSize: '0.8rem', gap: '0.4rem' }}>
-                      <span style={{ fontSize: '0.7rem', width: '16px' }}>{isOpen ? '▼' : '▶'}</span>
-                      <span style={{ color: 'var(--color-primary)' }}>{row.code}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} tasks • {row.avgProgress}%</span>
+                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_H}px`, display: 'flex', alignItems: 'center', paddingLeft: `${indent}px`, paddingRight: '0.5rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', backgroundColor: bg, fontSize: isGroup ? '0.8rem' : '0.72rem', gap: '0.35rem' }}>
+                      <span style={{ fontSize: '0.6rem', width: '14px', flexShrink: 0 }}>{isOpen ? '▼' : '▶'}</span>
+                      <span style={{ fontWeight: isGroup ? 700 : 600, color, flexShrink: 0 }}>{row.code}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isGroup ? 600 : 400 }}>{row.name}</span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} tasks • {row.avgProgress}%</span>
                     </div>
                   );
                 }
-                if (row.type === 'subgroup') {
-                  const isOpen = !collapsed.has(row.key);
-                  return (
-                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem 0 1.5rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', backgroundColor: '#f8fafc', fontWeight: 600, fontSize: '0.75rem', gap: '0.4rem' }}>
-                      <span style={{ fontSize: '0.65rem', width: '16px' }}>{isOpen ? '▼' : '▶'}</span>
-                      <span style={{ color: '#6366f1' }}>{row.code}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} • {row.avgProgress}%</span>
-                    </div>
-                  );
-                }
-                if (row.type === 'kpi') {
-                  const isOpen = !collapsed.has(row.key);
-                  return (
-                    <div key={row.key} onClick={() => toggle(row.key)} style={{ height: `${HDR_ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem 0 2.75rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', fontSize: '0.7rem', gap: '0.4rem' }}>
-                      <span style={{ fontSize: '0.6rem', width: '14px' }}>{isOpen ? '▼' : '▶'}</span>
-                      <span style={{ fontWeight: 600, color: '#0891b2' }}>{row.code}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-text-secondary)' }}>{row.name}</span>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--color-text-secondary)', flexShrink: 0 }}>{row.taskCount} • {row.avgProgress}%</span>
-                    </div>
-                  );
-                }
-                // task
                 const t = row.task;
+                const indent = row.depth * 20 + 8;
                 return (
-                  <div key={row.key} onClick={() => setSelectedTask(t)} style={{ height: `${ROW_H}px`, display: 'flex', alignItems: 'center', padding: '0 0.5rem 0 3.75rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', gap: '0.4rem' }} title={`${t.title} - ${t.department}`}>
+                  <div key={row.key} onClick={() => setSelectedTask(t)} style={{ height: `${ROW_H}px`, display: 'flex', alignItems: 'center', paddingLeft: `${indent}px`, paddingRight: '0.5rem', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', gap: '0.35rem' }} title={`${t.title} - ${t.department}`}>
                     <span style={{ width: '4px', height: '20px', borderRadius: '2px', backgroundColor: departmentColors[t.department] || '#666', flexShrink: 0 }}></span>
                     <div style={{ overflow: 'hidden', flex: 1 }}>
                       <div style={{ fontSize: '0.72rem', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
@@ -335,7 +360,6 @@ export default function GanttChartPage() {
 
             {/* Right chart */}
             <div style={{ flex: 1, minWidth: `${totalDays * DAY_W}px` }}>
-              {/* Date headers */}
               <div style={{ display: 'flex', height: '52px', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-primary)', color: 'white' }}>
                 {dateHeaders.map((h, i) => (
                   <div key={i} style={{ width: `${DAY_W}px`, minWidth: `${DAY_W}px`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid rgba(255,255,255,0.15)', fontSize: '0.7rem', backgroundColor: h.isToday ? 'rgba(255,255,255,0.2)' : 'transparent', position: 'relative' }}>
@@ -345,63 +369,39 @@ export default function GanttChartPage() {
                 ))}
               </div>
 
-              {/* Rows */}
               {ganttRows.map((row) => {
-                const rh = getRowHeight(row);
+                const h = rh(row);
+                const todayLine = todayIdx >= 0 ? <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div> : null;
 
-                if (row.type === 'group') {
+                if (row.type === 'header') {
                   const so = row.minStart ? getDayOffset(row.minStart) : 0;
                   const eo = row.maxEnd ? getDayOffset(row.maxEnd) : so;
                   const len = Math.max(eo - so + 1, 1);
+                  const barColor = levelColors[row.level] || '#888';
+                  const bg = levelBgColors[row.level] || 'transparent';
                   return (
-                    <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)', backgroundColor: '#f1f5f9' }}>
-                      {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
-                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: '10px', width: `${len * DAY_W}px`, height: '10px', backgroundColor: 'var(--color-primary)', borderRadius: '5px', opacity: 0.3 }}></div>}
+                    <div key={row.key} style={{ height: `${h}px`, position: 'relative', borderBottom: '1px solid var(--color-border)', backgroundColor: bg }}>
+                      {todayLine}
+                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: `${h / 2 - 4}px`, width: `${len * DAY_W}px`, height: '8px', backgroundColor: barColor, borderRadius: '4px', opacity: 0.25 }}></div>}
                     </div>
                   );
                 }
 
-                if (row.type === 'subgroup') {
-                  const so = row.minStart ? getDayOffset(row.minStart) : 0;
-                  const eo = row.maxEnd ? getDayOffset(row.maxEnd) : so;
-                  const len = Math.max(eo - so + 1, 1);
-                  return (
-                    <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)', backgroundColor: '#f8fafc' }}>
-                      {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
-                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: '11px', width: `${len * DAY_W}px`, height: '8px', backgroundColor: '#6366f1', borderRadius: '4px', opacity: 0.25 }}></div>}
-                    </div>
-                  );
-                }
-
-                if (row.type === 'kpi') {
-                  const so = row.minStart ? getDayOffset(row.minStart) : 0;
-                  const eo = row.maxEnd ? getDayOffset(row.maxEnd) : so;
-                  const len = Math.max(eo - so + 1, 1);
-                  return (
-                    <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)' }}>
-                      {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
-                      {row.minStart && <div style={{ position: 'absolute', left: `${so * DAY_W}px`, top: '12px', width: `${len * DAY_W}px`, height: '6px', backgroundColor: '#0891b2', borderRadius: '3px', opacity: 0.2 }}></div>}
-                    </div>
-                  );
-                }
-
-                // Task bar
                 const t = row.task;
-                const tStart = t.startDate || t.dueDate || t.createdAt?.split('T')[0];
-                const tEnd = t.dueDate || tStart;
-                if (!tStart) return <div key={row.key} style={{ height: `${rh}px`, borderBottom: '1px solid var(--color-border)' }}></div>;
-
-                const so = getDayOffset(tStart);
-                const eo = getDayOffset(tEnd);
+                const tS = t.startDate || t.dueDate || t.createdAt?.split('T')[0];
+                const tE = t.dueDate || tS;
+                if (!tS) return <div key={row.key} style={{ height: `${h}px`, borderBottom: '1px solid var(--color-border)' }}></div>;
+                const so = getDayOffset(tS);
+                const eo = getDayOffset(tE);
                 const len = Math.max(eo - so + 1, 1);
                 const pw = (t.progress / 100) * len * DAY_W;
 
                 return (
-                  <div key={row.key} style={{ height: `${rh}px`, position: 'relative', borderBottom: '1px solid var(--color-border)' }}>
-                    {todayIdx >= 0 && <div style={{ position: 'absolute', left: `${todayIdx * DAY_W + DAY_W / 2}px`, top: 0, bottom: 0, width: '2px', backgroundColor: '#ef4444', zIndex: 1, opacity: 0.4 }}></div>}
-                    <div onClick={() => setSelectedTask(t)} style={{ position: 'absolute', left: `${so * DAY_W + 2}px`, top: '6px', width: `${len * DAY_W - 4}px`, height: `${rh - 12}px`, backgroundColor: statusColors[t.status], borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', overflow: 'hidden', opacity: 0.9, zIndex: 2 }} title={`${t.title}: ${fmt(tStart)} → ${fmt(tEnd)} (${t.progress}%)`}>
+                  <div key={row.key} style={{ height: `${h}px`, position: 'relative', borderBottom: '1px solid var(--color-border)' }}>
+                    {todayLine}
+                    <div onClick={() => setSelectedTask(t)} style={{ position: 'absolute', left: `${so * DAY_W + 2}px`, top: '6px', width: `${len * DAY_W - 4}px`, height: `${h - 12}px`, backgroundColor: statusColors[t.status], borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', overflow: 'hidden', opacity: 0.9, zIndex: 2 }} title={`${t.title}: ${fmt(tS)} → ${fmt(tE)} (${t.progress}%)`}>
                       <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pw}px`, backgroundColor: 'rgba(0,0,0,0.15)', borderRadius: '4px 0 0 4px' }}></div>
-                      {len * DAY_W > 50 && <span style={{ position: 'relative', zIndex: 1, fontSize: '0.6rem', color: 'white', fontWeight: 600, padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.progress}%</span>}
+                      {len * DAY_W > 50 && <span style={{ position: 'relative', zIndex: 1, fontSize: '0.6rem', color: 'white', fontWeight: 600, padding: '0 6px', whiteSpace: 'nowrap' }}>{t.progress}%</span>}
                     </div>
                   </div>
                 );
@@ -414,23 +414,23 @@ export default function GanttChartPage() {
       {/* Modal */}
       {selectedTask && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setSelectedTask(null)}>
-          <div className="card" style={{ width: '90%', maxWidth: '500px', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+          <div className="card" style={{ width: '90%', maxWidth: '520px', maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
             <div className="card__header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0 }}>Chi tiết Task</h3>
               <button onClick={() => setSelectedTask(null)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
             </div>
             <div className="card__body">
               {(() => {
-                const info = kpiHierarchy[selectedTask.kpiItemId];
+                const path = kpiPaths[selectedTask.kpiItemId];
                 return (
                   <table style={{ width: '100%' }}>
                     <tbody>
                       <tr><td style={{ fontWeight: 600, padding: '8px 0', width: '130px' }}>Tiêu đề:</td><td>{selectedTask.title}</td></tr>
                       <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Mô tả:</td><td>{selectedTask.description || '-'}</td></tr>
                       <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Phòng ban:</td><td><span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: departmentColors[selectedTask.department] || '#666', color: 'white' }}>{selectedTask.department}</span></td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Nhóm KPI:</td><td>{info ? `${info.groupCode} - ${info.groupName}` : '-'}</td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Mã KPI:</td><td>{selectedTask.kpiCode}</td></tr>
-                      <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Tên KPI:</td><td>{info?.kpiName || '-'}</td></tr>
+                      {path && path.map((seg, i) => (
+                        <tr key={i}><td style={{ fontWeight: 600, padding: '6px 0', fontSize: '0.85rem' }}>{seg.level === 'group' ? 'Nhóm' : seg.level === 'subGroup' ? 'Phân nhóm' : `Level ${i + 1}`}:</td><td><span style={{ color: levelColors[seg.level], fontWeight: 500 }}>{seg.code}</span> - {seg.name}</td></tr>
+                      ))}
                       <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Người thực hiện:</td><td>{selectedTask.assignee || 'Chưa phân công'}</td></tr>
                       <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Trạng thái:</td><td><span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: statusColors[selectedTask.status], color: 'white' }}>{statusLabels[selectedTask.status]}</span></td></tr>
                       <tr><td style={{ fontWeight: 600, padding: '8px 0' }}>Tiến độ:</td><td>
