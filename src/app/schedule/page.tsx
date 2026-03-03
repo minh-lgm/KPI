@@ -52,10 +52,12 @@ export default function SchedulePage() {
   const [currentDate, setCurrentDate] = useState<Date | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filterDept, setFilterDept] = useState<string>('');
+  const [kpiNameMap, setKpiNameMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setCurrentDate(new Date());
     fetchTasks();
+    fetchKpiNames();
   }, []);
 
   const fetchTasks = async () => {
@@ -70,6 +72,34 @@ export default function SchedulePage() {
       toast.error('Không thể tải dữ liệu');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchKpiNames = async () => {
+    try {
+      const res = await fetch('/api/kpi');
+      if (!res.ok) return;
+      const data = await res.json();
+      const map: Record<string, string> = {};
+      for (const group of data.groups || []) {
+        for (const sub of group.subGroups || []) {
+          for (const item of sub.items || []) {
+            map[item.id] = item.name;
+            for (const si of item.subItems || []) {
+              map[si.id] = si.name;
+              for (const d of si.details || []) {
+                map[d.id] = d.name;
+                for (const sd of d.subDetails || []) {
+                  map[sd.id] = sd.name;
+                }
+              }
+            }
+          }
+        }
+      }
+      setKpiNameMap(map);
+    } catch (err) {
+      console.error('Error fetching KPI names:', err);
     }
   };
 
@@ -460,6 +490,10 @@ export default function SchedulePage() {
                   <tr>
                     <td style={{ fontWeight: 600, padding: '8px 0' }}>Mã KPI:</td>
                     <td>{selectedTask.kpiCode}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600, padding: '8px 0' }}>Tên KPI:</td>
+                    <td>{kpiNameMap[selectedTask.kpiItemId] || '-'}</td>
                   </tr>
                   <tr>
                     <td style={{ fontWeight: 600, padding: '8px 0' }}>Người thực hiện:</td>
