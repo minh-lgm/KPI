@@ -14,6 +14,7 @@ interface Task {
   assignee: string;
   status: 'pending' | 'in_progress' | 'completed';
   progress: number;
+  startDate: string;
   dueDate: string;
   createdAt: string;
   updatedAt: string;
@@ -99,7 +100,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, description, assignee, kpiCode, kpiItemId, kpiLevel, department, dueDate } = body;
+    const { title, description, assignee, kpiCode, kpiItemId, kpiLevel, department, startDate, dueDate } = body;
     
     if (!title || !kpiItemId || !department) {
       return NextResponse.json(
@@ -122,6 +123,7 @@ export async function POST(request: Request) {
       department,
       status: 'pending',
       progress: 0,
+      startDate: startDate || '',
       dueDate: dueDate || '',
       createdAt: now,
       updatedAt: now

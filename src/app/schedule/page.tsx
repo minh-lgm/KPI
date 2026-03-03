@@ -15,6 +15,7 @@ interface Task {
   assignee: string;
   status: 'pending' | 'in_progress' | 'completed';
   progress: number;
+  startDate: string;
   dueDate: string;
   createdAt: string;
   updatedAt: string;

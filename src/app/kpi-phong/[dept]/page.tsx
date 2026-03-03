@@ -16,6 +16,7 @@ interface Task {
   assignee: string;
   status: 'pending' | 'in_progress' | 'completed';
   progress: number;
+  startDate: string;
   dueDate: string;
   createdAt: string;
   updatedAt: string;
@@ -110,6 +111,7 @@ export default function KPIPhongPage() {
     assignee: '',
     kpiCode: '',
     kpiItemId: '',
+    startDate: '',
     dueDate: ''
   });
 
@@ -319,7 +321,7 @@ export default function KPIPhongPage() {
       if (res.ok) {
         const data = await res.json();
         setTasks(prev => [...prev, data]);
-        setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', dueDate: '' });
+        setNewTask({ title: '', description: '', assignee: '', kpiCode: '', kpiItemId: '', startDate: '', dueDate: '' });
         setSelectedSubGroup('');
         setSelectedItem('');
         setSelectedSubItem('');
@@ -793,6 +795,15 @@ export default function KPIPhongPage() {
                   </div>
                 </div>
                 
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Ngày bắt đầu</label>
+                  <input
+                    type="date"
+                    value={newTask.startDate}
+                    onChange={(e) => setNewTask({ ...newTask, startDate: e.target.value })}
+                    style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '4px' }}
+                  />
+                </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Hạn hoàn thành</label>
                   <input
